@@ -167,6 +167,28 @@ describe("ingestor", () => {
       assert.equal(path.extname(media.audioPath), ".mp3");
     });
 
+    it("reports download progress when the server declares a size", async () => {
+      // A real CDN sends content-length, and that is what switches the progress tap
+      // on — so until this test existed, nothing exercised the tap at all. It matters
+      // that the fake is a real Response: its body is a web ReadableStream, which is
+      // exactly what Node's fetch returns and what the tap has to cope with.
+      const bytes = "pretend audio";
+      const seen: number[] = [];
+
+      const media = await createIngestor({
+        audio,
+        fetch: serving(bytes, { headers: { "content-length": String(bytes.length) } }),
+      }).ingest(episode, workDir, (fraction) => seen.push(fraction));
+
+      assert.ok(seen.length > 0, "progress was reported");
+      assert.equal(seen.at(-1), 1, "progress reaches 1 when the whole body arrives");
+      assert.equal(
+        await fs.readFile(media.audioPath, "utf8"),
+        bytes,
+        "watching the bytes go past must not consume them",
+      );
+    });
+
     it("does not trust a URL to name a sensible file", async () => {
       const media = await createIngestor({ audio, fetch: serving("audio") }).ingest(
         { ...episode, episodeUrl: "https://cdn.example.com/stream?id=405" },

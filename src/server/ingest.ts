@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import type { SourceRef } from "../shared/model.ts";
@@ -97,7 +97,11 @@ export function createIngestor(options: IngestorOptions): Ingestor {
     const total = Number(response.headers.get("content-length") ?? 0);
     let received = 0;
 
-    const body = response.body as unknown as Readable;
+    // Node's fetch hands back a web ReadableStream, which has no `.on`. Convert it
+    // once, so the progress tap and pipeline() are both dealing with a real Node
+    // stream — casting instead type-checks and then throws on the first real
+    // download, because pipeline() accepts either and `.on` does not.
+    const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
     if (total > 0 && onProgress) {
       body.on("data", (chunk: Buffer) => {
         received += chunk.length;
