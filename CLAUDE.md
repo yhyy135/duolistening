@@ -105,6 +105,7 @@ Every one of these was a real bug caught by a test. If you change the code near 
 
 - **No `LICENSE`.** Needs choosing before this is published anywhere; the README says so too.
 - **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
+- **The lyrics lines are mouse-only.** Each is an `<li onClick>` with no `tabIndex`, role or key handler, so seeking by keyboard is impossible, and there are no playback shortcuts (space to pause, arrows to step a Line). A listening tool wants both.
 - **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so `POST /api/library/:id/retry` answers 409 and redoing one is delete-and-import.
 - **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate, and accepted: production is unaffected. Add `@vitejs/plugin-react` if it starts to grate.
 - **No DOM tests.** The web half's real logic lives in `shared/locate.ts` — pure, and covered there. The rest is rendering, and testing it would mean adding a DOM and a test framework this project deliberately doesn't have; it is checked by driving the built app in a browser instead.
