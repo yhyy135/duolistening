@@ -149,3 +149,19 @@ export const storageKeys = {
   /** Everything belonging to one Resource — what a delete must cascade over. */
   resourcePrefix: (id: ResourceId) => `resources/${id}/`,
 } as const;
+
+export type JobId = string;
+
+/**
+ * What an import job looks like from the outside: the POST /api/imports reply and
+ * every SSE frame it then streams. Lives here rather than in the server's ports
+ * because the web half reads it too.
+ */
+export interface JobState {
+  id: JobId;
+  resourceId: ResourceId;
+  phase: ImportPhase;
+  /** 0..1 within the current phase. */
+  progress?: number;
+  failureReason?: string;
+}

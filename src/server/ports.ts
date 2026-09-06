@@ -8,7 +8,8 @@
 
 import type {
   Episode,
-  ImportPhase,
+  JobId,
+  JobState,
   LanguageCode,
   Resource,
   ResourceId,
@@ -194,16 +195,9 @@ export interface Library {
   savePosition(id: ResourceId, seconds: number): Promise<void>;
 }
 
-export type JobId = string;
-
-export interface JobState {
-  id: JobId;
-  resourceId: ResourceId;
-  phase: ImportPhase;
-  /** 0..1 within the current phase. */
-  progress?: number;
-  failureReason?: string;
-}
+// Part of the wire contract, so it lives in shared/model.ts; re-exported here
+// because every server-side caller reaches for the seams through this file.
+export type { JobId, JobState } from "../shared/model.ts";
 
 /**
  * Runs ingest → transcribe → annotate → store as one background job, so the HTTP
