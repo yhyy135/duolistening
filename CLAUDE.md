@@ -25,6 +25,10 @@ doesn't, so **build before you start**. In dev, run both halves and use :5173.
 Environment: `DUOLISTENING_PASSWORD` (access gate — unset disables it, fine on a laptop, reckless in public), `DUOLISTENING_DATA_DIR` (default `./data`), `DUOLISTENING_S3_BUCKET` + `DUOLISTENING_S3_PREFIX` (switches storage to S3; credentials and `AWS_ENDPOINT_URL` come from the standard AWS variables), `PORT`.
 
 External binaries: **ffmpeg/ffprobe** and **yt-dlp** must be on PATH. Everything else is npm.
+The `Dockerfile` supplies all three; `compose.yaml` is the one-command way to run it.
+
+Node 22.18+ (unflagged type stripping). Verified on 22.23 and 24.20 — the four
+`audio/ffmpeg.test.ts` cases are the only ones that need a real ffmpeg.
 
 ## How the code is laid out
 
@@ -96,6 +100,8 @@ Every one of these was a real bug caught by a test. If you change the code near 
 
 ## Not yet done
 
+- **No `LICENSE`.** Needs choosing before this is published anywhere; the README says so too.
+- **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
 - **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so `POST /api/library/:id/retry` answers 409 and redoing one is delete-and-import.
 - **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate, and accepted: production is unaffected. Add `@vitejs/plugin-react` if it starts to grate.
 - **No DOM tests.** The web half's real logic lives in `shared/locate.ts` — pure, and covered there. The rest is rendering, and testing it would mean adding a DOM and a test framework this project deliberately doesn't have; it is checked by driving the built app in a browser instead.

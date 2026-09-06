@@ -1,0 +1,16 @@
+services:
+  duolistening:
+    build: .
+    # Or, once you have published it somewhere: image: duolistening
+    ports:
+      - "3000:3000"
+    environment:
+      # Read from the .env file beside this one. Unset it and anyone who reaches
+      # the port can spend your API budget.
+      DUOLISTENING_PASSWORD: ${DUOLISTENING_PASSWORD:?put one in .env — see README}
+    volumes:
+      - duolistening-data:/data
+    restart: unless-stopped
+
+volumes:
+  duolistening-data:
