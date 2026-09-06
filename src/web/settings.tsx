@@ -7,12 +7,16 @@ import {
   type LanguageCode,
   type ModelSlot,
   type Settings,
+  type SettingsCheck,
+  type SlotCheck,
 } from "../shared/model.ts";
 import { api, reason } from "./api.ts";
 
 export function SettingsScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [check, setCheck] = useState<SettingsCheck | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     api.settings().then(setSettings, (failure: unknown) => setStatus(reason(failure)));
@@ -20,7 +24,24 @@ export function SettingsScreen() {
 
   if (!settings) return <p className="notice">{status ?? "Loading…"}</p>;
 
-  const edit = (change: Partial<Settings>) => setSettings({ ...settings, ...change });
+  const edit = (change: Partial<Settings>) => {
+    setSettings({ ...settings, ...change });
+    // A tick from before the edit would be vouching for something else.
+    setCheck(null);
+    setStatus(null);
+  };
+
+  async function test() {
+    setChecking(true);
+    setStatus(null);
+    try {
+      setCheck(await api.checkSettings(settings as Settings));
+    } catch (failure) {
+      setStatus(reason(failure));
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <main className="settings">
@@ -42,12 +63,14 @@ export function SettingsScreen() {
           legend="Text Model — translation and the ask-AI popup"
           modelHint="gpt-4o-mini"
           slot={settings.textModel}
+          check={check?.textModel}
           onChange={(textModel) => edit({ textModel })}
         />
         <Slot
           legend="Transcription Model — speech to text"
           modelHint="whisper-1"
           slot={settings.transcriptionModel}
+          check={check?.transcriptionModel}
           onChange={(transcriptionModel) => edit({ transcriptionModel })}
         />
 
@@ -69,8 +92,18 @@ export function SettingsScreen() {
           </label>
         </fieldset>
 
-        <button type="submit">Save</button>
-        {status && <span className="notice">{status}</span>}
+        <div className="actions">
+          <button type="submit">Save</button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={checking}
+            onClick={() => void test()}
+          >
+            {checking ? "Testing…" : "Test connection"}
+          </button>
+          {status && <span className="notice">{status}</span>}
+        </div>
       </form>
     </main>
   );
@@ -80,11 +113,13 @@ function Slot({
   legend,
   modelHint,
   slot,
+  check,
   onChange,
 }: {
   legend: string;
   modelHint: string;
   slot: ModelSlot;
+  check: SlotCheck | undefined;
   onChange: (slot: ModelSlot) => void;
 }) {
   return (
@@ -114,6 +149,11 @@ function Slot({
           onChange={(event) => onChange({ ...slot, model: event.target.value })}
         />
       </label>
+      {check && (
+        <p className={check.ok ? "slot-check ok" : "slot-check bad"}>
+          {check.ok ? "✓ Answered." : check.detail}
+        </p>
+      )}
     </fieldset>
   );
 }

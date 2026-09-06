@@ -12,6 +12,7 @@ import type {
   Resource,
   ResourceId,
   Settings,
+  SettingsCheck,
   SourceRef,
   Transcript,
 } from "../shared/model.ts";
@@ -75,6 +76,9 @@ export const api = {
   settings: () => request<Settings>("/api/settings"),
   /** Send a masked apiKey back untouched to leave the stored key alone. */
   saveSettings: (settings: Settings) => send<Settings>("/api/settings", "PUT", settings),
+  /** Tries both slots without storing anything; masked keys are merged server-side. */
+  checkSettings: (settings: Settings) =>
+    send<SettingsCheck>("/api/settings/check", "POST", settings),
 
   library: () => request<Resource[]>("/api/library"),
   resource: (id: ResourceId) => request<PlayableResource>(`/api/library/${id}`),

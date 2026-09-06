@@ -17,6 +17,7 @@ import { createImportJobs } from "./import-jobs.ts";
 import { createIngestor } from "./ingest.ts";
 import { createJapaneseTokenizerOnce } from "./japanese.ts";
 import { createLibrary } from "./library.ts";
+import { createSettingsCheck } from "./model-check.ts";
 import { createPodcastFeed } from "./podcast-feed.ts";
 import type { JapaneseTokenizer, Storage } from "./ports.ts";
 import { readSettings } from "./settings.ts";
@@ -44,16 +45,14 @@ const ingestor = createIngestor({ audio });
 const japaneseTokenizer = createJapaneseTokenizerOnce();
 
 const textModelFor = (settings: Settings) => createTextModel({ slot: settings.textModel });
+const speechToTextFor = (settings: Settings) =>
+  createSpeechToText({ slot: settings.transcriptionModel });
 
 const importJobs = createImportJobs({
   library,
   ingestor,
   settings: () => readSettings(storage),
-  transcriber: (settings) =>
-    createTranscriber({
-      audio,
-      speech: createSpeechToText({ slot: settings.transcriptionModel }),
-    }),
+  transcriber: (settings) => createTranscriber({ audio, speech: speechToTextFor(settings) }),
   annotator: async (settings) =>
     createAnnotator({
       textModel: textModelFor(settings),
@@ -69,6 +68,10 @@ const app = createApp({
   importJobs,
   podcastFeed,
   textModel: textModelFor,
+  checkSettings: createSettingsCheck({
+    textModel: textModelFor,
+    speechToText: speechToTextFor,
+  }),
   password,
   ...(serveMedia && { serveMedia }),
 });

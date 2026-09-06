@@ -373,3 +373,22 @@ button.ask {
   color: var(--ink);
   font-size: 1rem;
 }
+
+.settings .actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.slot-check {
+  margin: 0;
+  font-size: 0.85em;
+  /* Provider errors arrive verbatim and can be long; let them wrap rather than
+     stretching the fieldset. */
+  overflow-wrap: anywhere;
+}
+.slot-check.ok {
+  color: #7ad9a1;
+}
+.slot-check.bad {
+  color: var(--bad);
+}

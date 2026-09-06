@@ -165,3 +165,20 @@ export interface JobState {
   progress?: number;
   failureReason?: string;
 }
+
+/** How one model slot answered when it was tried. */
+export interface SlotCheck {
+  ok: boolean;
+  /** Empty when ok; otherwise already-readable text explaining what went wrong. */
+  detail: string;
+}
+
+/**
+ * The reply to a connection test. Each slot is tried the way the import pipeline
+ * will actually use it, so a pass here means that endpoint, key and model name work
+ * together — not merely that the host resolves.
+ */
+export interface SettingsCheck {
+  textModel: SlotCheck;
+  transcriptionModel: SlotCheck;
+}

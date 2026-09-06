@@ -9,6 +9,7 @@ import {
   type LanguageCode,
   type ModelSlot,
   type Settings,
+  type SettingsCheck,
   type SourceRef,
 } from "../shared/model.ts";
 import type { ImportJobs, Library, PodcastFeed, Storage, TextModel } from "./ports.ts";
@@ -23,6 +24,8 @@ export interface AppOptions {
   importJobs: ImportJobs;
   podcastFeed: PodcastFeed;
   textModel: (settings: Settings) => TextModel;
+  /** Tries both model slots for real; see model-check.ts. */
+  checkSettings: (settings: Settings) => Promise<SettingsCheck>;
   /**
    * The shared access gate (ADR 0001). Leaving it empty disables the gate, which is
    * reasonable on a laptop and reckless on a public host — main.ts says so loudly.
@@ -94,6 +97,20 @@ export function createApp(options: AppOptions) {
     const merged = applySettingsEdit(await readSettings(storage), edit);
     await writeSettings(storage, merged);
     return context.json(maskSettings(merged));
+  });
+
+  /**
+   * Tries the settings in the request body without storing them, so the Settings
+   * screen can test what is on screen rather than what was last saved. The body is
+   * the same shape PUT takes, masked keys and all, and is merged the same way — so
+   * testing a slot you did not retype tests the key that is actually stored.
+   */
+  app.post("/api/settings/check", async (context) => {
+    const edit = parseSettings(await readJson<unknown>(context.req.raw));
+    if (!edit) return context.json({ error: "malformed settings" }, 400);
+
+    const merged = applySettingsEdit(await readSettings(storage), edit);
+    return context.json(await options.checkSettings(merged));
   });
 
   app.get("/api/library", async (context) => context.json(await library.list()));

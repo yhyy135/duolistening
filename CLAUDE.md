@@ -53,6 +53,7 @@ docs/adr/       why things are the way they are
 | `annotator.ts`                      | Batched translation, plus Japanese tokens. Owns the "is it Japanese" branch                                  |
 | `japanese.ts`                       | kuromoji: morphemes, part-of-speech mapping, katakana→hiragana readings                                      |
 | `text-model.ts`                     | One `/chat/completions` call, retry policy, JSON repair                                                      |
+| `model-check.ts`                    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                |
 | `import-jobs.ts`                    | ingest → transcribe → annotate as a background job, with progress — and the retry that resumes one           |
 | `app.ts`                            | HTTP routes and the access gate. Takes every dependency; touches no env                                      |
 | `main.ts`                           | Composition root. The only file that reads `process.env`                                                     |
@@ -80,7 +81,8 @@ Every one of these was a real bug caught by a test. If you change the code near 
 - **Translations are matched back by index, never by position.** A model that drops or reorders one entry would otherwise shift every later translation onto the wrong Line — invisible in the UI, wrong everywhere. (`annotator.ts`)
 - **Furigana comes from kuromoji's `reading`, not `pronunciation`.** `pronunciation` writes long vowels as ー (ショーカイ); furigana is written しょうかい. (`japanese.ts`)
 - **`Word` and `Token` are different things.** Word = audio timing from the ASR. Token = morphology from kuromoji. Japanese has no spaces, so their boundaries genuinely disagree; never merge the two arrays. Reconciling them for display is `tokenWords`' job, and it happens at render time — a Token never gains a timestamp (ADR 0005).
-- **A masked API key means "unchanged".** Anything starting with `••••` is the value we showed the browser; storing it would wipe the real key on any settings save. (`settings.ts`)
+- **A masked API key means "unchanged".** Anything starting with `••••` is the value we showed the browser; storing it would wipe the real key on any settings save. The connection check runs the edit through the same `applySettingsEdit`, so testing a slot you did not retype probes the stored key rather than the mask. (`settings.ts`, `app.ts`)
+- **The connection check calls the endpoint the pipeline calls.** A cheaper probe — listing `/models`, or just resolving the host — passes for a model name that does not exist and for a provider that cannot transcribe at all. The transcription slot therefore gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio" and would fail a working slot. (`model-check.ts`)
 - **Storage keys are untrusted.** They carry ids that came off a URL; `..` escapes the root on the local adapter. Both adapters validate. (`storage/key.ts`)
 - **The access gate covers `/api/*` and `/media/*` only.** The SPA shell must load before anyone can be asked for a password. (`app.ts`)
 - **`<audio>` cannot send headers**, so the gate accepts a cookie as well as a bearer token. (`app.ts`)

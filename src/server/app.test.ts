@@ -39,6 +39,7 @@ describe("http app", () => {
   let library: Library;
   let rootDir: string;
   let started: JobState[];
+  let checked: Settings[];
   let retried: string[];
   let asked: string[];
   let app: ReturnType<typeof createApp>;
@@ -51,6 +52,7 @@ describe("http app", () => {
     library = createLibrary(storage);
     started = [];
     asked = [];
+    checked = [];
     retried = [];
 
     const importJobs: ImportJobs = {
@@ -93,6 +95,15 @@ describe("http app", () => {
       importJobs,
       podcastFeed,
       textModel,
+      // Records what the route decided to probe, which is the part worth testing
+      // here: the merge of the posted edit with what is already stored.
+      checkSettings: async (settings) => {
+        checked.push(settings);
+        return {
+          textModel: { ok: true, detail: "" },
+          transcriptionModel: { ok: false, detail: "Not configured." },
+        };
+      },
       password: PASSWORD,
       serveMedia: createLocalMediaServer(rootDir),
     });
@@ -138,6 +149,7 @@ describe("http app", () => {
         importJobs: {
           start: async () => ({ id: "x", resourceId: "x", phase: "queued" }),
         } as never,
+        checkSettings: (() => {}) as never,
         podcastFeed: {} as never,
         textModel: () => ({}) as never,
       });
@@ -165,6 +177,80 @@ describe("http app", () => {
       assert.equal(body.textModel.apiKey, "••••1234");
       assert.equal(body.transcriptionModel.apiKey, "••••5678");
       assert.equal(body.textModel.baseUrl, "https://a", "only the key is hidden");
+    });
+
+    it("tests what is on screen, with the real key behind any mask", async () => {
+      await storage.writeDoc("settings.json", {
+        textModel: { baseUrl: "https://a", apiKey: "sk-supersecret1234", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+        nativeLanguage: "zh-CN",
+        targetLanguage: "ja",
+      });
+
+      const response = await app.request("/api/settings/check", {
+        method: "POST",
+        headers: auth,
+        // What the screen holds after the user retyped one model name and left the
+        // keys alone: one mask, one untouched real key.
+        body: JSON.stringify({
+          textModel: { baseUrl: "https://a", apiKey: "••••1234", model: "m2" },
+          transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+          nativeLanguage: "zh-CN",
+          targetLanguage: "ja",
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        textModel: { ok: true, detail: "" },
+        transcriptionModel: { ok: false, detail: "Not configured." },
+      });
+
+      const probed = checked[0] as Settings;
+      assert.equal(
+        probed.textModel.apiKey,
+        "sk-supersecret1234",
+        "probing with the mask itself would fail against every provider",
+      );
+      assert.equal(
+        probed.textModel.model,
+        "m2",
+        "but the edited model name is what gets tried",
+      );
+    });
+
+    it("does not store what it was asked to test", async () => {
+      await storage.writeDoc("settings.json", {
+        textModel: { baseUrl: "https://a", apiKey: "sk-supersecret1234", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+        nativeLanguage: "zh-CN",
+        targetLanguage: "ja",
+      });
+
+      await app.request("/api/settings/check", {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          textModel: { baseUrl: "https://nope", apiKey: "sk-typo", model: "m" },
+          transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+          nativeLanguage: "zh-CN",
+          targetLanguage: "ja",
+        }),
+      });
+
+      const stored = await storage.readDoc<Settings>("settings.json");
+      assert.equal(stored?.textModel.baseUrl, "https://a", "a test is not a save");
+    });
+
+    it("rejects a malformed body rather than probing nonsense", async () => {
+      const response = await app.request("/api/settings/check", {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({ textModel: "not a slot" }),
+      });
+
+      assert.equal(response.status, 400);
+      assert.deepEqual(checked, []);
     });
 
     it("keeps the stored key when the browser sends the mask back unchanged", async () => {
@@ -393,6 +479,7 @@ describe("http app", () => {
         library,
         importJobs: {} as never,
         podcastFeed: {} as never,
+        checkSettings: (() => {}) as never,
         password: PASSWORD,
         textModel: () => ({
           complete: async () => {
