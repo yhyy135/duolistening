@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { S3Client } from "@aws-sdk/client-s3";
 import { serve } from "@hono/node-server";
+import type { MiddlewareHandler } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { JAPANESE, type Settings } from "../shared/model.ts";
 import { createAnnotator } from "./annotator.ts";
@@ -73,10 +74,15 @@ const app = createApp({
 });
 
 if (existsSync(webRoot)) {
+  // Vite puts a content hash in every asset filename, so a changed file is a changed
+  // URL and these can be cached forever.
+  app.use("/assets/*", cacheFor("public, max-age=31536000, immutable"));
   app.use("/assets/*", serveStatic({ root: webRoot }));
   // Everything else is a client-side route, so hand back the shell and let the SPA
-  // work out what to show.
-  app.get("*", serveStatic({ root: webRoot, path: "index.html" }));
+  // work out what to show. The shell's URL never changes, so without this a browser
+  // caches it heuristically off last-modified and an upgraded install keeps running
+  // the previous build's JavaScript against the new API.
+  app.get("*", cacheFor("no-cache"), serveStatic({ root: webRoot, path: "index.html" }));
 } else {
   console.warn(`No web build at ${webRoot} — API only. Run the frontend build first.`);
 }
@@ -88,6 +94,14 @@ if (!password) {
 }
 console.log(`duolistening listening on http://localhost:${port} (storage: ${where})`);
 serve({ fetch: app.fetch, port });
+
+/** Sets cache-control on whatever the handler after it produced. */
+function cacheFor(value: string): MiddlewareHandler {
+  return async (context, next) => {
+    await next();
+    context.header("cache-control", value);
+  };
+}
 
 function buildStorage(): {
   storage: Storage;
