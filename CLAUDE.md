@@ -98,6 +98,7 @@ Every one of these was a real bug caught by a test. If you change the code near 
 - Test through a module's interface, not past it. Fakes are plain object literals implementing a port.
 - **Use the real thing where a stub would lie.** `japanese.test.ts` loads the actual kuromoji dictionary; `audio/ffmpeg.test.ts` synthesises audio with ffmpeg and checks real silence detection. A wrong filter string or a misplaced `-ss` passes against a fake and ships broken.
 - `storage/contract.test.ts` runs one suite against **both** Storage adapters. The S3 half only runs when `DUOLISTENING_TEST_S3_BUCKET` is set.
+- **One unexplained failure, 2026-09-07.** A full run came back 166/167 while a dev server, Docker and a browser were all busy on the same machine; 40 later runs could not reproduce it and the failing test was never identified. If it returns, start with the two `setTimeout(…, 10)` waits in `import-jobs.test.ts` — they assume the queue advances within 10ms, which is the only load-sensitive assumption in the suite.
 - A `ponytail:` comment marks a deliberate shortcut and names its ceiling. There are two: the Library's in-process write mutex, and the in-memory job queue. Both break under multi-instance deployment, which the single-tenant design (ADR 0001) rules out for now.
 
 ## Not yet done
