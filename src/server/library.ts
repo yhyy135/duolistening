@@ -69,6 +69,20 @@ export function createLibrary(storage: Storage): Library {
       await storage.deleteObject(storageKeys.audio(id));
     },
 
+    async restoreAudio(id: ResourceId, destPath: string): Promise<boolean> {
+      try {
+        await storage.readMediaToFile(storageKeys.audio(id), destPath);
+        return true;
+      } catch {
+        // Absent is the expected answer here — an import that died before the audio
+        // was stored leaves none — and the adapters report it as a throw with an
+        // adapter-specific shape. Sniffing for ENOENT vs NoSuchKey would put S3's
+        // vocabulary in this file to distinguish "gone" from "storage is having a
+        // moment", and both answers lead the caller to the same place: fetch it again.
+        return false;
+      }
+    },
+
     async savePosition(id: ResourceId, seconds: number) {
       if (!Number.isFinite(seconds) || seconds < 0) {
         throw new Error(`Invalid playback position: ${seconds}`);

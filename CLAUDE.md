@@ -49,7 +49,7 @@ docs/adr/       why things are the way they are
 | `annotator.ts`                      | Batched translation, plus Japanese tokens. Owns the "is it Japanese" branch                                  |
 | `japanese.ts`                       | kuromoji: morphemes, part-of-speech mapping, katakana→hiragana readings                                      |
 | `text-model.ts`                     | One `/chat/completions` call, retry policy, JSON repair                                                      |
-| `import-jobs.ts`                    | ingest → transcribe → annotate → store as a background job, with progress                                    |
+| `import-jobs.ts`                    | ingest → transcribe → annotate as a background job, with progress — and the retry that resumes one           |
 | `app.ts`                            | HTTP routes and the access gate. Takes every dependency; touches no env                                      |
 | `main.ts`                           | Composition root. The only file that reads `process.env`                                                     |
 
@@ -68,6 +68,8 @@ only file that knows the server exists. Everything above it deals in model types
 
 Every one of these was a real bug caught by a test. If you change the code near one, keep the test that guards it.
 
+- **A retry resumes; it never restarts.** A stored Transcript means annotate only; stored audio means skip the download. Restarting instead would re-download and pay the transcription bill again to recover from a rate-limited translation — making the cheapest failure the most expensive. The pipeline stores those intermediates precisely so this can work. (`import-jobs.ts`)
+- **Audio is written back only when it was just fetched.** On a resume it is already in the Library, and saving the restored copy would re-upload every byte to the same key. (`import-jobs.ts`)
 - **A job publishes `ready`/`failed` only after the Library write and temp cleanup finish.** The terminal phase is what stops a watcher; publishing early lets the UI read a stale shelf. (`import-jobs.ts`)
 - **`save` writes blobs then the shelf; `remove` rewrites the shelf then deletes blobs.** Mirror images, so a crash halfway leaves unreachable bytes, never a shelf entry pointing at a missing file. (`library.ts`)
 - **`words` is omitted, never `[]`.** An empty array reads as "word timing exists" and the player renders karaoke highlighting against nothing. (`transcriber.ts`, ADR 0004)
@@ -94,5 +96,6 @@ Every one of these was a real bug caught by a test. If you change the code near 
 
 ## Not yet done
 
+- **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so `POST /api/library/:id/retry` answers 409 and redoing one is delete-and-import.
 - **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate, and accepted: production is unaffected. Add `@vitejs/plugin-react` if it starts to grate.
 - **No DOM tests.** The web half's real logic lives in `shared/locate.ts` — pure, and covered there. The rest is rendering, and testing it would mean adding a DOM and a test framework this project deliberately doesn't have; it is checked by driving the built app in a browser instead.

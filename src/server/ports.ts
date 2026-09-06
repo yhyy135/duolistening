@@ -193,6 +193,16 @@ export interface Library {
   remove(id: ResourceId): Promise<void>;
   /** No-op for an unknown id: a delete racing a position save must not throw. */
   savePosition(id: ResourceId, seconds: number): Promise<void>;
+  /**
+   * Copies a Resource's stored audio to `destPath` so it can be worked on again,
+   * and answers false when there is none — the mirror of `save`'s `audioPath`.
+   *
+   * False rather than a throw because the only caller is a retry deciding whether
+   * it still has to fetch, and "no audio" is an ordinary answer there. A storage
+   * error reads as false too: the cost of being wrong is one re-download, which is
+   * what a retry without this would have done anyway.
+   */
+  restoreAudio(id: ResourceId, destPath: string): Promise<boolean>;
 }
 
 // Part of the wire contract, so it lives in shared/model.ts; re-exported here
@@ -210,6 +220,25 @@ export type { JobId, JobState } from "../shared/model.ts";
  */
 export interface ImportJobs {
   start(ref: SourceRef): Promise<JobState>;
+  /**
+   * Runs an existing Resource's import again — the way out of a failed import, and
+   * of one left mid-phase by a restart.
+   *
+   * Resumes rather than restarts, because the pipeline already stores its expensive
+   * intermediate results: a stored Transcript means annotation is all that is left,
+   * and stored audio means the download can be skipped. Only when neither survives
+   * does it fetch again. That matters because the cheapest step to fail — translation
+   * on a rate-limited key — would otherwise cost a re-download and a second bill for
+   * transcription.
+   *
+   * Null when the id is not in the Library, or when it is already ready: re-importing
+   * a good Resource would throw away a Transcript that cost money, so that is a
+   * delete-and-import-again, not a retry.
+   *
+   * A Resource whose job is still running comes back with that live job instead of a
+   * second one — two jobs writing one Library entry would fight.
+   */
+  retry(id: ResourceId): Promise<JobState | null>;
   get(id: JobId): JobState | null;
   /** Yields on every state change until the job settles. Drives the SSE endpoint. */
   watch(id: JobId): AsyncIterable<JobState>;

@@ -124,6 +124,23 @@ export function createApp(options: AppOptions) {
     return context.body(null, 204);
   });
 
+  /**
+   * The way out of a failed import, and of one a restart left mid-phase. Resuming is
+   * the ImportJobs' business; this only turns "cannot" into a status code.
+   */
+  app.post("/api/library/:id/retry", async (context) => {
+    const id = context.req.param("id");
+    const found = await library.get(id);
+    if (!found) return context.json({ error: "not found" }, 404);
+    if (found.resource.phase === "ready") {
+      return context.json({ error: "already imported — delete it to import it again" }, 409);
+    }
+
+    const state = await importJobs.retry(id);
+    if (!state) return context.json({ error: "not found" }, 404);
+    return context.json(state, 202);
+  });
+
   app.post("/api/imports", async (context) => {
     const body = await readJson<{ source?: unknown }>(context.req.raw);
     const source = parseSourceRef(body.source);

@@ -81,6 +81,8 @@ export const api = {
   remove: (id: ResourceId) => request<void>(`/api/library/${id}`, { method: "DELETE" }),
   savePosition: (id: ResourceId, seconds: number) =>
     send<void>(`/api/library/${id}/position`, "PUT", { seconds }),
+  /** Resumes a failed or abandoned import; the reply is a job to watch, as for a new one. */
+  retry: (id: ResourceId) => send<JobState>(`/api/library/${id}/retry`, "POST", {}),
 
   episodes: (feedUrl: string) =>
     request<{ feedTitle: string; episodes: Episode[] }>(

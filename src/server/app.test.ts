@@ -39,6 +39,7 @@ describe("http app", () => {
   let library: Library;
   let rootDir: string;
   let started: JobState[];
+  let retried: string[];
   let asked: string[];
   let app: ReturnType<typeof createApp>;
 
@@ -50,12 +51,17 @@ describe("http app", () => {
     library = createLibrary(storage);
     started = [];
     asked = [];
+    retried = [];
 
     const importJobs: ImportJobs = {
       start: async (ref) => {
         const state: JobState = { id: "job-1", resourceId: "job-1", phase: "queued" };
         started.push({ ...state, failureReason: JSON.stringify(ref) });
         return state;
+      },
+      retry: async (id) => {
+        retried.push(id);
+        return { id, resourceId: id, phase: "queued" };
       },
       get: (id) => (id === "job-1" ? { id, resourceId: id, phase: "ready" } : null),
       watch: async function* (id) {
@@ -274,6 +280,50 @@ describe("http app", () => {
         body: JSON.stringify({ seconds: "soon" }),
       });
       assert.equal(bad.status, 400);
+    });
+
+    it("retries a failed import", async () => {
+      await library.save({
+        ...resource("abc"),
+        phase: "failed",
+        failureReason: "model is down",
+      });
+
+      const response = await app.request("/api/library/abc/retry", {
+        method: "POST",
+        headers: auth,
+      });
+
+      assert.equal(response.status, 202);
+      assert.deepEqual(retried, ["abc"]);
+      const state = (await response.json()) as { resourceId: string };
+      assert.equal(state.resourceId, "abc");
+    });
+
+    it("refuses to retry a Resource that already imported", async () => {
+      await library.save(resource("abc"));
+
+      const response = await app.request("/api/library/abc/retry", {
+        method: "POST",
+        headers: auth,
+      });
+
+      assert.equal(
+        response.status,
+        409,
+        "re-importing a good Resource is a delete, not a retry",
+      );
+      assert.deepEqual(retried, [], "and the job is never even asked");
+    });
+
+    it("reports a retry of an unknown Resource as not found", async () => {
+      const response = await app.request("/api/library/nope/retry", {
+        method: "POST",
+        headers: auth,
+      });
+
+      assert.equal(response.status, 404);
+      assert.deepEqual(retried, []);
     });
   });
 

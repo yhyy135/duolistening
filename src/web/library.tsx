@@ -46,6 +46,15 @@ export function LibraryScreen() {
     watching.current.add(stop);
   }
 
+  async function retry(resource: Resource) {
+    setError(null);
+    try {
+      follow(await api.retry(resource.id));
+    } catch (failure) {
+      setError(reason(failure));
+    }
+  }
+
   async function remove(resource: Resource) {
     if (!confirm(`Delete “${resource.title}” and its transcript?`)) return;
     await api.remove(resource.id);
@@ -65,6 +74,12 @@ export function LibraryScreen() {
           const phase = jobs[resource.id]?.phase ?? resource.phase;
           const progress = jobs[resource.id]?.progress;
           const reason = jobs[resource.id]?.failureReason ?? resource.failureReason;
+          // A Resource this page is not watching has no job in sight: either it
+          // failed, or a restart abandoned it mid-phase. Both need the same way out,
+          // and the server refuses the retry if one is in fact still running.
+          const watched = jobs[resource.id];
+          const stalled =
+            phase !== "ready" && (!watched || watched.phase === "failed" || phase === "failed");
           return (
             <li key={resource.id} className={phase === "ready" ? "ready" : ""}>
               <a
@@ -87,6 +102,11 @@ export function LibraryScreen() {
                   </span>
                 )}
               </a>
+              {stalled && (
+                <button onClick={() => void retry(resource)}>
+                  {phase === "failed" ? "Retry" : "Resume"}
+                </button>
+              )}
               <button className="ghost" onClick={() => void remove(resource)}>
                 Delete
               </button>

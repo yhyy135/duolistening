@@ -2,7 +2,14 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ImportPhase, Resource, Settings, SourceRef } from "../shared/model.ts";
+import type {
+  ImportPhase,
+  Resource,
+  ResourceId,
+  Settings,
+  SourceRef,
+  Transcript,
+} from "../shared/model.ts";
 import type {
   Annotator,
   ImportJobs,
@@ -60,44 +67,72 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
     });
   }
 
-  async function run(id: JobId, ref: SourceRef, resource: Resource): Promise<void> {
+  /**
+   * What a run already has, so it can pick up where the last one stopped. Empty for
+   * a first import; filled in by `retry` from whatever survived (ADR 0003's chunking
+   * and the transcription bill are the reasons this is worth the branch).
+   */
+  interface Resume {
+    /** A stored, un-annotated Transcript: transcription is done, annotate only. */
+    transcript?: Transcript;
+    /** The Library may still hold the audio; try to restore it before fetching. */
+    storedAudio?: boolean;
+  }
+
+  async function run(id: JobId, resource: Resource, resume: Resume = {}): Promise<void> {
     const settings = await options.settings();
     const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "duolistening-import-"));
-    let current = resource;
+    // A retry clears the old reason as it starts, so the shelf never shows last
+    // time's failure next to this time's progress.
+    let current: Resource = { ...resource, failureReason: undefined };
 
     // Reaching a terminal phase is what stops a watcher, so nothing may still be
     // pending when it is published: the Library write and the cleanup both finish
     // first, and only then does the job settle.
     const outcome = await (async (): Promise<Partial<JobState>> => {
       try {
-        publish(id, { phase: "fetching", progress: undefined });
-        current = { ...current, phase: "fetching" };
-        await library.save(current);
+        let transcript = resume.transcript;
+        let audioPath: string | undefined;
+        /** Set only when these are new bytes the Library has not stored yet. */
+        let fetched: string | undefined;
 
-        const media = await ingestor.ingest(ref, workDir, (fraction) =>
-          publish(id, { progress: fraction }),
-        );
+        if (!transcript && resume.storedAudio) {
+          const restored = path.join(workDir, "audio.m4a");
+          if (await library.restoreAudio(current.id, restored)) audioPath = restored;
+        }
 
-        current = {
-          ...current,
-          title: media.title,
-          durationSec: media.durationSec,
-          phase: "transcribing",
-        };
-        publish(id, { phase: "transcribing", progress: undefined });
-        // Persist the audio as soon as it exists: it is the slowest thing to fetch
-        // again, and everything after this point can fail without losing it.
-        await library.save(current, { audioPath: media.audioPath });
+        if (!transcript && !audioPath) {
+          publish(id, { phase: "fetching", progress: undefined });
+          current = { ...current, phase: "fetching" };
+          await library.save(current);
 
-        const transcript = await options.transcriber(settings).transcribe(media.audioPath, {
-          language: settings.targetLanguage,
-          onProgress: (fraction) => publish(id, { progress: fraction }),
-        });
+          const media = await ingestor.ingest(current.source, workDir, (fraction) =>
+            publish(id, { progress: fraction }),
+          );
+          audioPath = fetched = media.audioPath;
+          current = { ...current, title: media.title, durationSec: media.durationSec };
+        }
+
+        if (!transcript) {
+          current = { ...current, phase: "transcribing" };
+          publish(id, { phase: "transcribing", progress: undefined });
+          // Persist the audio as soon as it exists: it is the slowest thing to fetch
+          // again, and everything after this point can fail without losing it. On a
+          // resume it is already stored, and writing it back would re-upload every
+          // byte for nothing.
+          await library.save(current, fetched ? { audioPath: fetched } : undefined);
+
+          transcript = await options.transcriber(settings).transcribe(audioPath as string, {
+            language: settings.targetLanguage,
+            onProgress: (fraction) => publish(id, { progress: fraction }),
+          });
+        }
 
         current = { ...current, phase: "annotating" };
         publish(id, { phase: "annotating", progress: undefined });
         // Store the bare transcript before annotating. Transcription is the expensive
-        // step; a failure in translation must not throw it away.
+        // step; a failure in translation must not throw it away — and this is what
+        // lets the retry after such a failure skip straight to annotating.
         await library.save(current, { transcript });
 
         const annotated = await (
@@ -146,7 +181,27 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
       jobs.set(id, { id, resourceId: id, phase: "queued" });
       await library.save(resource);
 
-      const work = () => run(id, ref, resource);
+      const work = () => run(id, resource);
+      queue = queue.then(work, work);
+      return jobs.get(id) as JobState;
+    },
+
+    async retry(id: ResourceId): Promise<JobState | null> {
+      // A second job on one Resource would race the first over the same Library
+      // entry, so an unfinished one is handed back instead of started again.
+      const live = jobs.get(id);
+      if (live && !SETTLED.has(live.phase)) return live;
+
+      const found = await library.get(id);
+      if (!found || found.resource.phase === "ready") return null;
+
+      // A Transcript can only be on disk un-annotated: the annotated one is written
+      // in the same breath as the ready phase, and this Resource is not ready.
+      const resume: Resume =
+        found.transcript.length > 0 ? { transcript: found.transcript } : { storedAudio: true };
+
+      jobs.set(id, { id, resourceId: id, phase: "queued" });
+      const work = () => run(id, found.resource, resume);
       queue = queue.then(work, work);
       return jobs.get(id) as JobState;
     },
