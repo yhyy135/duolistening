@@ -101,8 +101,16 @@ declare global {
  */
 function loadKuromoji(dicPath: string): Promise<Kuromoji> {
   // Node, which is the test: no document, and the package imports cleanly there.
+  //
+  // The specifier is built rather than written, so a bundler cannot see it. Spelled
+  // out, Vite follows it, emits a 62KB chunk the browser will never load, and warns
+  // that the loader's `require("path")` has been externalized — about a file that
+  // only ever runs under Node, where `path` is real.
   if (typeof document === "undefined") {
-    return import("kuromoji").then((module) => module.default as unknown as Kuromoji);
+    const nodeOnly = "kuro" + "moji";
+    return import(/* @vite-ignore */ nodeOnly).then(
+      (module) => module.default as unknown as Kuromoji,
+    );
   }
   if (window.kuromoji) return Promise.resolve(window.kuromoji);
 
