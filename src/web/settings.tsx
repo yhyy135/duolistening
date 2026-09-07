@@ -1,4 +1,13 @@
-// Settings: the two model slots (ADR 0002) and the language pair.
+// Settings: the two model slots (ADR 0002), the byte proxy (ADR 0009), and the
+// language pair.
+//
+// The masking is gone, and it is worth saying why rather than leaving a hole where
+// it was. It existed because settings crossed a wire: the server sent `••••abcd`, a
+// value coming back still masked meant "leave the stored key alone", and a Show
+// button fetched the real one on demand. ADR 0008 removed the server, so a key never
+// leaves this browser and there is no wire to protect. What is left is shoulder
+// surfing, which is a display concern — hence a password field with a toggle that
+// asks nobody anything.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -6,14 +15,38 @@ import {
   LANGUAGE_NAMES,
   type LanguageCode,
   type ModelSlot,
+  type ProxySettings,
   type Settings,
   type SettingsCheck,
   type SlotCheck,
 } from "../shared/model.ts";
-import { api, reason } from "./api.ts";
 import { useT } from "./i18n.ts";
+import { checkSettings } from "./model-check.ts";
+import { checkProxy, type ProxyCheck } from "./proxy.ts";
+import { readSettings, writeSettings } from "./store.ts";
+import { listModels } from "./text-model.ts";
 
 type SlotField = "textModel" | "transcriptionModel";
+
+const EMPTY_SLOT: ModelSlot = { baseUrl: "", apiKey: "", model: "" };
+const BLANK: Settings = {
+  textModel: EMPTY_SLOT,
+  transcriptionModel: EMPTY_SLOT,
+  nativeLanguage: "en",
+  // No targetLanguage: unset means "detect it per recording", and a default here
+  // would pin every import to one language for someone who never opened this screen.
+};
+
+/**
+ * The clip a provider is asked to fetch for itself, and the URL the proxy is asked to
+ * pull through. Same file, and it has to be absolute — whoever fetches it is not this
+ * browser. A proxy narrowed with ALLOWED_HOSTS has to include this origin, or a
+ * correctly configured proxy reports itself broken.
+ */
+const probeUrl = () => new URL("/probe.wav", location.origin).href;
+
+const reason = (failure: unknown) =>
+  failure instanceof Error ? failure.message : String(failure);
 
 /** `onLocale` so the interface switches language the moment the Native Language does,
     rather than on the next reload. */
@@ -21,25 +54,21 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [check, setCheck] = useState<SettingsCheck | null>(null);
+  const [proxyCheck, setProxyCheck] = useState<ProxyCheck | null>(null);
   const [checking, setChecking] = useState(false);
-  // Which slot is mid-reveal or mid-fetch, so only that slot's button says so.
-  const [revealing, setRevealing] = useState<SlotField | null>(null);
   const [fetchingModels, setFetchingModels] = useState<SlotField | null>(null);
-  // A field once it holds its real key rather than a mask — the "Show" button has
-  // nothing left to do for it until the screen is reloaded and re-masks it.
-  const [revealed, setRevealed] = useState<Partial<Record<SlotField, true>>>({});
   const [modelOptions, setModelOptions] = useState<Partial<Record<SlotField, string[]>>>({});
   const [modelsStatus, setModelsStatus] = useState<Partial<Record<SlotField, SlotCheck>>>({});
-  // What is actually stored, so Back can tell a real edit from a screen nobody
-  // touched without asking the server again.
+  // What is actually stored, so Back can tell a real edit from a screen nobody touched.
   const savedRef = useRef<Settings | null>(null);
   const t = useT();
 
   useEffect(() => {
-    api.settings().then(
+    readSettings().then(
       (loaded) => {
-        savedRef.current = loaded;
-        setSettings(loaded);
+        const current = loaded ?? BLANK;
+        savedRef.current = current;
+        setSettings(current);
       },
       (failure: unknown) => setStatus(reason(failure)),
     );
@@ -51,6 +80,7 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
     setSettings({ ...settings, ...change });
     // A tick from before the edit would be vouching for something else.
     setCheck(null);
+    setProxyCheck(null);
     setStatus(null);
     setModelsStatus({});
   };
@@ -64,10 +94,23 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   };
 
   async function test() {
+    const edited = settings as Settings;
     setChecking(true);
     setStatus(null);
     try {
-      setCheck(await api.checkSettings(settings as Settings));
+      // Together, because a reader wants to know what is wrong, not what is wrong
+      // first. Three probes against three different things.
+      const [slots, proxy] = await Promise.all([
+        checkSettings({
+          textModel: edited.textModel,
+          transcriptionModel: edited.transcriptionModel,
+          ...(edited.targetLanguage && { targetLanguage: edited.targetLanguage }),
+          probeUrl: probeUrl(),
+        }),
+        checkProxy(edited.proxy, probeUrl()),
+      ]);
+      setCheck(slots);
+      setProxyCheck(proxy);
     } catch (failure) {
       setStatus(reason(failure));
     } finally {
@@ -75,36 +118,14 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
     }
   }
 
-  /**
-   * Swaps a masked key for the real one, fetched fresh rather than kept around from
-   * load — a screen left open for a while should not be quietly holding a secret it
-   * never had to. One-way: reloading the screen is what re-masks it.
-   */
-  async function reveal(field: SlotField) {
-    setRevealing(field);
-    setStatus(null);
-    try {
-      const full = await api.revealSettings();
-      setSettings((current) => current && { ...current, [field]: full[field] });
-      setRevealed((current) => ({ ...current, [field]: true }));
-    } catch (failure) {
-      setStatus(reason(failure));
-    } finally {
-      setRevealing(null);
-    }
-  }
-
   async function fetchModels(field: SlotField) {
     setFetchingModels(field);
     try {
-      const { models } = await api.listModels(field, settings as Settings);
+      const models = await listModels((settings as Settings)[field]);
       setModelOptions((current) => ({ ...current, [field]: models }));
       setModelsStatus((current) => ({
         ...current,
-        [field]: {
-          ok: true,
-          detail: t("settings.modelsFound", { count: models.length }),
-        },
+        [field]: { ok: true, detail: t("settings.modelsFound", { count: models.length }) },
       }));
     } catch (failure) {
       setModelsStatus((current) => ({
@@ -126,21 +147,17 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           event.preventDefault();
           setStatus(t("common.saving"));
           try {
-            // The reply re-masks both keys, so what is on screen keeps matching what
-            // is stored — and a second save in a row still means "leave them alone".
-            const saved = await api.saveSettings(settings);
-            savedRef.current = saved;
-            setSettings(saved);
-            setRevealed({});
+            await writeSettings(settings);
+            savedRef.current = settings;
             setStatus(t("common.saved"));
           } catch (failure) {
             setStatus(reason(failure));
           }
         }}
       >
-        {/* First, and ahead of the two model slots below: the language pair is the
-            setting someone actually comes back to change, while a key mistyped once
-            is rarely touched again. */}
+        {/* First, and ahead of the slots below: the language pair is the setting
+            someone actually comes back to change, while a key mistyped once is
+            rarely touched again. */}
         <fieldset>
           <legend>{t("settings.languages")}</legend>
           <label>
@@ -173,9 +190,6 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           modelHint="gpt-4o-mini"
           slot={settings.textModel}
           check={check?.textModel}
-          revealed={!!revealed.textModel}
-          revealing={revealing === "textModel"}
-          onReveal={() => void reveal("textModel")}
           modelOptions={modelOptions.textModel}
           modelsStatus={modelsStatus.textModel}
           fetchingModels={fetchingModels === "textModel"}
@@ -189,24 +203,21 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           hint={t("settings.groqHint")}
           slot={settings.transcriptionModel}
           check={check?.transcriptionModel}
-          revealed={!!revealed.transcriptionModel}
-          revealing={revealing === "transcriptionModel"}
-          onReveal={() => void reveal("transcriptionModel")}
           modelOptions={modelOptions.transcriptionModel}
           modelsStatus={modelsStatus.transcriptionModel}
           fetchingModels={fetchingModels === "transcriptionModel"}
           onFetchModels={() => void fetchModels("transcriptionModel")}
           onChange={(transcriptionModel) => edit({ transcriptionModel })}
         />
+        <Proxy
+          proxy={settings.proxy}
+          check={proxyCheck}
+          onChange={(proxy) => edit({ proxy })}
+        />
 
         <div className="actions">
           <button type="submit">{t("common.save")}</button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={checking}
-            onClick={() => void test()}
-          >
+          <button type="button" className="ghost" disabled={checking} onClick={() => void test()}>
             {checking ? t("settings.testing") : t("settings.test")}
           </button>
           {status && <span className="notice">{status}</span>}
@@ -216,8 +227,26 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   );
 }
 
-/** The prefix settings.ts marks a stored-but-unshown key with (settings.ts's MASK). */
-const MASKED = "••••";
+/**
+ * A key field. `type="password"` and a toggle, which is the whole of what masking
+ * has to be now: the value is already here, so revealing it asks nobody anything.
+ */
+function SecretInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [shown, setShown] = useState(false);
+  const t = useT();
+  return (
+    <span className="field-row">
+      <input
+        type={shown ? "text" : "password"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button type="button" className="ghost" onClick={() => setShown(!shown)}>
+        {t("settings.show")}
+      </button>
+    </span>
+  );
+}
 
 function Slot({
   field,
@@ -226,9 +255,6 @@ function Slot({
   hint,
   slot,
   check,
-  revealed,
-  revealing,
-  onReveal,
   modelOptions,
   modelsStatus,
   fetchingModels,
@@ -242,10 +268,6 @@ function Slot({
   hint?: string;
   slot: ModelSlot;
   check: SlotCheck | undefined;
-  /** This slot's key is the real one on screen now, fetched via onReveal. */
-  revealed: boolean;
-  revealing: boolean;
-  onReveal: () => void;
   /** Model ids from the last successful fetch, offered as the Model field's dropdown. */
   modelOptions: string[] | undefined;
   modelsStatus: SlotCheck | undefined;
@@ -269,39 +291,21 @@ function Slot({
       </label>
       <label>
         {t("settings.apiKey")}
-        <span className="field-row">
-          {/* Arrives masked (••••abcd). Sending it back unchanged keeps the stored
-              key; Show fetches the real one so a typo can be fixed in place instead
-              of retyped from scratch. */}
-          <input
-            value={slot.apiKey}
-            onChange={(event) => onChange({ ...slot, apiKey: event.target.value })}
-          />
-          {!revealed && slot.apiKey.startsWith(MASKED) && (
-            <button type="button" className="ghost" disabled={revealing} onClick={onReveal}>
-              {revealing ? "…" : t("settings.show")}
-            </button>
-          )}
-        </span>
+        <SecretInput value={slot.apiKey} onChange={(apiKey) => onChange({ ...slot, apiKey })} />
       </label>
       <label>
         {t("settings.model")}
         <span className="field-row">
-          {/* A native datalist: typing filters the fetched list, and a model the
-              list does not have can still be typed by hand — the same freedom the
-              plain text field already had. */}
+          {/* A native datalist: typing filters the fetched list, and a model the list
+              does not have can still be typed by hand — the same freedom the plain
+              text field already had. */}
           <input
             value={slot.model}
             placeholder={modelHint}
             list={datalistId}
             onChange={(event) => onChange({ ...slot, model: event.target.value })}
           />
-          <button
-            type="button"
-            className="ghost"
-            disabled={fetchingModels}
-            onClick={onFetchModels}
-          >
+          <button type="button" className="ghost" disabled={fetchingModels} onClick={onFetchModels}>
             {fetchingModels ? t("settings.fetching") : t("settings.fetchModels")}
           </button>
         </span>
@@ -318,6 +322,48 @@ function Slot({
           {modelsStatus.detail}
         </p>
       )}
+      {check && (
+        <p className={check.ok ? "slot-check ok" : "slot-check bad"}>
+          {/* A passing check can still carry something worth reading: a provider that
+              transcribed an upload but could not fetch a URL is not broken, and
+              imports will not work either. */}
+          {check.ok ? check.detail || t("settings.answered") : check.detail}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+function Proxy({
+  proxy,
+  check,
+  onChange,
+}: {
+  proxy: ProxySettings | undefined;
+  check: ProxyCheck | null;
+  onChange: (proxy: ProxySettings) => void;
+}) {
+  const current = proxy ?? { baseUrl: "", key: "" };
+  const t = useT();
+  return (
+    <fieldset>
+      <legend>{t("settings.proxy")}</legend>
+      <p className="hint">{t("settings.proxyHint")}</p>
+      <label>
+        {t("settings.baseUrl")}
+        <input
+          value={current.baseUrl}
+          placeholder="https://duolistening-proxy.workers.dev/"
+          onChange={(event) => onChange({ ...current, baseUrl: event.target.value })}
+        />
+      </label>
+      <label>
+        {/* Not an API key: a shared secret the deployer hands out, and the proxy's
+            only gate (ADR 0009). It is a secret precisely because it lives here
+            rather than in the page everyone downloads. */}
+        {t("settings.proxyKey")}
+        <SecretInput value={current.key} onChange={(key) => onChange({ ...current, key })} />
+      </label>
       {check && (
         <p className={check.ok ? "slot-check ok" : "slot-check bad"}>
           {check.ok ? t("settings.answered") : check.detail}

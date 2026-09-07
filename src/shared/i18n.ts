@@ -61,6 +61,12 @@ const en = {
   "player.keyLoop": "loop",
 
   "settings.languages": "Languages",
+  "settings.proxy": "Byte proxy",
+  "settings.proxyKey": "Proxy key",
+  "settings.proxyHint": "The Worker that fetches audio for you. Imports need it.",
+
+
+
   "settings.native": "Native Language",
   "settings.studying": "Studying (optional)",
   "settings.autoDetect": "Auto-detect",
@@ -138,6 +144,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "循环",
 
     "settings.languages": "语言",
+    "settings.proxy": "字节代理",
+    "settings.proxyKey": "代理密钥",
+    "settings.proxyHint": "替你抓取音频的 Worker，导入时必须用到。",
+
+
+
     "settings.native": "母语",
     "settings.studying": "学习语言（选填）",
     "settings.autoDetect": "自动识别",
@@ -209,6 +221,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "循環",
 
     "settings.languages": "語言",
+    "settings.proxy": "位元組代理",
+    "settings.proxyKey": "代理金鑰",
+    "settings.proxyHint": "替你抓取音訊的 Worker，匯入時必須用到。",
+
+
+
     "settings.native": "母語",
     "settings.studying": "學習語言（選填）",
     "settings.autoDetect": "自動辨識",
@@ -280,6 +298,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "リピート",
 
     "settings.languages": "言語",
+    "settings.proxy": "バイトプロキシ",
+    "settings.proxyKey": "プロキシキー",
+    "settings.proxyHint": "音声を取得する Worker。インポートに必要です。",
+
+
+
     "settings.native": "母語",
     "settings.studying": "学習中の言語（任意）",
     "settings.autoDetect": "自動判定",
@@ -351,6 +375,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "반복",
 
     "settings.languages": "언어",
+    "settings.proxy": "바이트 프록시",
+    "settings.proxyKey": "프록시 키",
+    "settings.proxyHint": "오디오를 가져오는 Worker입니다. 가져오기에 필요합니다.",
+
+
+
     "settings.native": "모국어",
     "settings.studying": "학습 언어 (선택)",
     "settings.autoDetect": "자동 감지",
@@ -422,6 +452,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "bucle",
 
     "settings.languages": "Idiomas",
+    "settings.proxy": "Proxy de bytes",
+    "settings.proxyKey": "Clave del proxy",
+    "settings.proxyHint": "El Worker que descarga el audio. Las importaciones lo necesitan.",
+
+
+
     "settings.native": "Idioma nativo",
     "settings.studying": "Estudiando (opcional)",
     "settings.autoDetect": "Detección automática",
@@ -493,6 +529,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "boucle",
 
     "settings.languages": "Langues",
+    "settings.proxy": "Proxy d'octets",
+    "settings.proxyKey": "Clé du proxy",
+    "settings.proxyHint": "Le Worker qui récupère l'audio. Les imports en ont besoin.",
+
+
+
     "settings.native": "Langue maternelle",
     "settings.studying": "Langue étudiée (facultatif)",
     "settings.autoDetect": "Détection automatique",
@@ -564,6 +606,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "player.keyLoop": "Schleife",
 
     "settings.languages": "Sprachen",
+    "settings.proxy": "Byte-Proxy",
+    "settings.proxyKey": "Proxy-Schlüssel",
+    "settings.proxyHint": "Der Worker, der das Audio abruft. Importe brauchen ihn.",
+
+
+
     "settings.native": "Muttersprache",
     "settings.studying": "Lernsprache (optional)",
     "settings.autoDetect": "Automatisch erkennen",
