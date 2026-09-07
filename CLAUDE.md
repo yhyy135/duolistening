@@ -2,7 +2,7 @@
 
 A self-hosted listening-practice tool. Import a YouTube video or podcast episode, transcribe it with your own LLM keys, and study it through a lyrics-style transcript: the current line scrolls into view and highlights as it plays, your native-language translation sits under each line, and Japanese gets furigana and part-of-speech colouring.
 
-Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — seven decisions, one paragraph each.
+Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is. Ten decisions — but note that 0008–0010 are **accepted and not yet built**: they describe the refactor in progress on `dev`, and they supersede 0001, 0003 and 0007, which are what the code below still does.
 
 **Status: both halves are complete and runnable.**
 

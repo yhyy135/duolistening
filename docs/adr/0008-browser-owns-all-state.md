@@ -1,0 +1,11 @@
+# The browser owns every byte of state; the server owns none
+
+Status: accepted, not yet built. Supersedes [ADR 0001](0001-single-tenant-self-hosted.md) and [ADR 0007](0007-single-storage-seam.md).
+
+Settings, the Library shelf, Transcripts and audio blobs all live in the viewer's IndexedDB. There is no `data/` directory, no `settings.json`, no `resources/index.json`, no access password, and no `Storage` seam with local and S3 adapters behind it. The API keys never reach a machine we run.
+
+This is how several people share one deployment while each pays for their own transcription. ADR 0001 rejected multi-tenancy because auth, sessions and per-user data isolation are an order of magnitude more work than the feature justified, and told anyone wanting to serve several people to run their own instance. That reasoning still holds; this reaches the goal from the other side, by deleting the state that would have needed isolating. Per-user API keys then cost nothing — they are simply a setting, and settings are already per-browser.
+
+We considered keeping the server and adding a real user system, and we considered a middle position where the browser holds the keys and sends them with each request. The middle position is the tempting one and it does not work: the server would still hold other people's keys in memory for the length of a job, would still need identity to know whose shelf to write, and would lose an import whose tab closed. Neither variant survives the observation that a server holding nothing needs no login at all.
+
+The cost is not security, it is durability and reach. A Library is per-browser-per-origin, so a phone and a laptop are two Libraries with no path between them — and for a listening app the phone is a plausible primary device. Clearing site data destroys Transcripts that cost real money: they measure 127KB to 904KB of JSON each, against audio blobs of 4.8MB to 41MB for the same episodes. So `navigator.storage.persist()` must be requested and an export path must ship early, not eventually. Kuromoji's dictionary also becomes a browser download on the first Japanese import, which [ADR 0005](0005-japanese-tagging-via-morphological-analyzer.md) never had to pay for.

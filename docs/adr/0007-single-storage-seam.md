@@ -1,5 +1,9 @@
 # One storage seam, no relational database
 
+Status: superseded by [ADR 0008](0008-browser-owns-all-state.md). There is no server-side
+persistence left for the seam to hide, and no `playbackUrl` branch to justify it: audio is
+a blob in the browser, played from a blob URL.
+
 All persisted state — settings, Resource metadata, Transcripts, and audio — goes through a single `Storage` interface with two adapters: local filesystem and S3. There is no database. Documents are JSON objects, the shelf listing is one `resources/index.json`, and audio is a blob alongside it.
 
 The deciding constraint is that S3 support has to be real. If metadata lived in SQLite while only audio went to S3, an instance would still need a persistent volume and S3 mode would solve half the problem. Nothing here needs relational queries: single user, tens to hundreds of Resources, and the most complex read is "list what I have imported."
