@@ -8,5 +8,13 @@ export default defineConfig({
   build: { outDir: "../../dist/web", emptyOutDir: true },
   // main.ts serves the built SPA itself; in dev the two run apart and this bridges
   // them, cookies included — /media is here so <audio> can stream through the proxy.
-  server: { proxy: { "/api": "http://localhost:3000", "/media": "http://localhost:3000" } },
+  //
+  // Anchored patterns, not the bare prefixes: Vite matches a plain string as a prefix,
+  // and the root is src/web, so "/api" also caught this app's own /api.ts module and
+  // proxied it to the backend instead of serving it. The page came up blank with a
+  // module MIME error, which points nowhere near this line. A leading ^ makes Vite
+  // read the key as a regex, and the trailing slash is what keeps api.ts out of it.
+  server: {
+    proxy: { "^/api/": "http://localhost:3000", "^/media/": "http://localhost:3000" },
+  },
 });
