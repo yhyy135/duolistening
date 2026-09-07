@@ -79,6 +79,14 @@ export const api = {
   /** Tries both slots without storing anything; masked keys are merged server-side. */
   checkSettings: (settings: Settings) =>
     send<SettingsCheck>("/api/settings/check", "POST", settings),
+  /** The real stored keys, for the Settings screen's "Show" action. */
+  revealSettings: () => request<Settings>("/api/settings/reveal"),
+  /**
+   * Lists the models at one slot's base URL, for that slot's model picker. Masked
+   * keys are merged server-side the same way checkSettings' are.
+   */
+  listModels: (field: "textModel" | "transcriptionModel", settings: Settings) =>
+    send<{ models: string[] }>(`/api/settings/models/${field}`, "POST", settings),
 
   library: () => request<Resource[]>("/api/library"),
   resource: (id: ResourceId) => request<PlayableResource>(`/api/library/${id}`),

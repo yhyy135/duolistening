@@ -12,11 +12,21 @@ import {
 } from "../shared/model.ts";
 import { api, reason } from "./api.ts";
 
+type SlotField = "textModel" | "transcriptionModel";
+
 export function SettingsScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [check, setCheck] = useState<SettingsCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  // Which slot is mid-reveal or mid-fetch, so only that slot's button says so.
+  const [revealing, setRevealing] = useState<SlotField | null>(null);
+  const [fetchingModels, setFetchingModels] = useState<SlotField | null>(null);
+  // A field once it holds its real key rather than a mask — the "Show" button has
+  // nothing left to do for it until the screen is reloaded and re-masks it.
+  const [revealed, setRevealed] = useState<Partial<Record<SlotField, true>>>({});
+  const [modelOptions, setModelOptions] = useState<Partial<Record<SlotField, string[]>>>({});
+  const [modelsStatus, setModelsStatus] = useState<Partial<Record<SlotField, SlotCheck>>>({});
   // What is actually stored, so Back can tell a real edit from a screen nobody
   // touched without asking the server again.
   const savedRef = useRef<Settings | null>(null);
@@ -38,6 +48,7 @@ export function SettingsScreen() {
     // A tick from before the edit would be vouching for something else.
     setCheck(null);
     setStatus(null);
+    setModelsStatus({});
   };
 
   const goBack = () => {
@@ -58,6 +69,47 @@ export function SettingsScreen() {
     }
   }
 
+  /**
+   * Swaps a masked key for the real one, fetched fresh rather than kept around from
+   * load — a screen left open for a while should not be quietly holding a secret it
+   * never had to. One-way: reloading the screen is what re-masks it.
+   */
+  async function reveal(field: SlotField) {
+    setRevealing(field);
+    setStatus(null);
+    try {
+      const full = await api.revealSettings();
+      setSettings((current) => current && { ...current, [field]: full[field] });
+      setRevealed((current) => ({ ...current, [field]: true }));
+    } catch (failure) {
+      setStatus(reason(failure));
+    } finally {
+      setRevealing(null);
+    }
+  }
+
+  async function fetchModels(field: SlotField) {
+    setFetchingModels(field);
+    try {
+      const { models } = await api.listModels(field, settings as Settings);
+      setModelOptions((current) => ({ ...current, [field]: models }));
+      setModelsStatus((current) => ({
+        ...current,
+        [field]: {
+          ok: true,
+          detail: `${models.length} model${models.length === 1 ? "" : "s"} found.`,
+        },
+      }));
+    } catch (failure) {
+      setModelsStatus((current) => ({
+        ...current,
+        [field]: { ok: false, detail: reason(failure) },
+      }));
+    } finally {
+      setFetchingModels(null);
+    }
+  }
+
   return (
     <main className="settings">
       <button type="button" className="back" onClick={goBack}>
@@ -73,6 +125,7 @@ export function SettingsScreen() {
             const saved = await api.saveSettings(settings);
             savedRef.current = saved;
             setSettings(saved);
+            setRevealed({});
             setStatus("Saved");
           } catch (failure) {
             setStatus(reason(failure));
@@ -101,18 +154,34 @@ export function SettingsScreen() {
         </fieldset>
 
         <Slot
+          field="textModel"
           legend="Text Model — translation and the ask-AI popup"
           modelHint="gpt-4o-mini"
           slot={settings.textModel}
           check={check?.textModel}
+          revealed={!!revealed.textModel}
+          revealing={revealing === "textModel"}
+          onReveal={() => void reveal("textModel")}
+          modelOptions={modelOptions.textModel}
+          modelsStatus={modelsStatus.textModel}
+          fetchingModels={fetchingModels === "textModel"}
+          onFetchModels={() => void fetchModels("textModel")}
           onChange={(textModel) => edit({ textModel })}
         />
         <Slot
+          field="transcriptionModel"
           legend="Transcription Model — speech to text"
           modelHint="whisper-1"
           hint="Groq runs Whisper for free: try https://api.groq.com/openai/v1 with model whisper-large-v3-turbo — get a key at console.groq.com."
           slot={settings.transcriptionModel}
           check={check?.transcriptionModel}
+          revealed={!!revealed.transcriptionModel}
+          revealing={revealing === "transcriptionModel"}
+          onReveal={() => void reveal("transcriptionModel")}
+          modelOptions={modelOptions.transcriptionModel}
+          modelsStatus={modelsStatus.transcriptionModel}
+          fetchingModels={fetchingModels === "transcriptionModel"}
+          onFetchModels={() => void fetchModels("transcriptionModel")}
           onChange={(transcriptionModel) => edit({ transcriptionModel })}
         />
 
@@ -133,22 +202,44 @@ export function SettingsScreen() {
   );
 }
 
+/** The prefix settings.ts marks a stored-but-unshown key with (settings.ts's MASK). */
+const MASKED = "••••";
+
 function Slot({
+  field,
   legend,
   modelHint,
   hint,
   slot,
   check,
+  revealed,
+  revealing,
+  onReveal,
+  modelOptions,
+  modelsStatus,
+  fetchingModels,
+  onFetchModels,
   onChange,
 }: {
+  field: SlotField;
   legend: string;
   modelHint: string;
   /** A free-form tip shown under the legend — where to find a slot worth trying. */
   hint?: string;
   slot: ModelSlot;
   check: SlotCheck | undefined;
+  /** This slot's key is the real one on screen now, fetched via onReveal. */
+  revealed: boolean;
+  revealing: boolean;
+  onReveal: () => void;
+  /** Model ids from the last successful fetch, offered as the Model field's dropdown. */
+  modelOptions: string[] | undefined;
+  modelsStatus: SlotCheck | undefined;
+  fetchingModels: boolean;
+  onFetchModels: () => void;
   onChange: (slot: ModelSlot) => void;
 }) {
+  const datalistId = `models-${field}`;
   return (
     <fieldset>
       <legend>{legend}</legend>
@@ -163,20 +254,55 @@ function Slot({
       </label>
       <label>
         API key
-        {/* Arrives masked (••••abcd). Sending it back unchanged keeps the stored key. */}
-        <input
-          value={slot.apiKey}
-          onChange={(event) => onChange({ ...slot, apiKey: event.target.value })}
-        />
+        <span className="field-row">
+          {/* Arrives masked (••••abcd). Sending it back unchanged keeps the stored
+              key; Show fetches the real one so a typo can be fixed in place instead
+              of retyped from scratch. */}
+          <input
+            value={slot.apiKey}
+            onChange={(event) => onChange({ ...slot, apiKey: event.target.value })}
+          />
+          {!revealed && slot.apiKey.startsWith(MASKED) && (
+            <button type="button" className="ghost" disabled={revealing} onClick={onReveal}>
+              {revealing ? "…" : "Show"}
+            </button>
+          )}
+        </span>
       </label>
       <label>
         Model
-        <input
-          value={slot.model}
-          placeholder={modelHint}
-          onChange={(event) => onChange({ ...slot, model: event.target.value })}
-        />
+        <span className="field-row">
+          {/* A native datalist: typing filters the fetched list, and a model the
+              list does not have can still be typed by hand — the same freedom the
+              plain text field already had. */}
+          <input
+            value={slot.model}
+            placeholder={modelHint}
+            list={datalistId}
+            onChange={(event) => onChange({ ...slot, model: event.target.value })}
+          />
+          <button
+            type="button"
+            className="ghost"
+            disabled={fetchingModels}
+            onClick={onFetchModels}
+          >
+            {fetchingModels ? "Fetching…" : "Fetch models"}
+          </button>
+        </span>
+        {modelOptions && (
+          <datalist id={datalistId}>
+            {modelOptions.map((id) => (
+              <option key={id} value={id} />
+            ))}
+          </datalist>
+        )}
       </label>
+      {modelsStatus && (
+        <p className={modelsStatus.ok ? "slot-check ok" : "slot-check bad"}>
+          {modelsStatus.detail}
+        </p>
+      )}
       {check && (
         <p className={check.ok ? "slot-check ok" : "slot-check bad"}>
           {check.ok ? "✓ Answered." : check.detail}

@@ -186,6 +186,49 @@ export function createTextModel(options: TextModelOptions): TextModel {
   };
 }
 
+/**
+ * Lists the models available at a slot's base URL — the OpenAI-compatible
+ * `GET /models` shape, which every provider from ADR 0002 exposes regardless of
+ * whether the slot ends up used for chat or transcription. Feeds the Settings
+ * screen's model picker, so a model name does not have to be typed from memory or
+ * copied out of a provider's docs.
+ */
+export async function listModels(
+  slot: ModelSlot,
+  fetchImpl: typeof globalThis.fetch = globalThis.fetch,
+): Promise<string[]> {
+  if (!slot.baseUrl.trim()) {
+    throw new ModelError("bad_request", "Set a base URL first.");
+  }
+  const endpoint = `${slot.baseUrl.replace(/\/$/, "")}/models`;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(endpoint, {
+      headers: { authorization: `Bearer ${slot.apiKey}` },
+    });
+  } catch (cause) {
+    throw new ModelError("network", `Could not reach ${endpoint}`, { cause });
+  }
+
+  if (!response.ok) {
+    throw new ModelError(
+      statusToReason(response.status),
+      `Listing models failed with ${response.status}: ${(await safeText(response)).slice(0, 500)}`,
+    );
+  }
+
+  const body = (await response.json().catch(() => null)) as {
+    data?: { id?: unknown }[];
+  } | null;
+  const ids = body?.data
+    ?.map((entry) => entry.id)
+    .filter((id): id is string => typeof id === "string");
+  if (!ids) throw new ModelError("bad_response", "Model list returned no data array");
+
+  return ids.sort();
+}
+
 /** Accepts bare JSON, a fenced block, or JSON sitting inside a sentence. */
 function tryParse<T>(raw: string): { ok: true; value: T } | { ok: false } {
   for (const candidate of [raw, ...extractCandidates(raw)]) {

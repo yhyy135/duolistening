@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
-import type { Resource, Settings, Transcript } from "../shared/model.ts";
+import type { ModelSlot, Resource, Settings, Transcript } from "../shared/model.ts";
 import { createApp } from "./app.ts";
 import { createLibrary } from "./library.ts";
 import type {
@@ -40,6 +40,7 @@ describe("http app", () => {
   let rootDir: string;
   let started: JobState[];
   let checked: Settings[];
+  let listed: ModelSlot[];
   let retried: string[];
   let asked: string[];
   let app: ReturnType<typeof createApp>;
@@ -53,6 +54,7 @@ describe("http app", () => {
     started = [];
     asked = [];
     checked = [];
+    listed = [];
     retried = [];
 
     const importJobs: ImportJobs = {
@@ -107,6 +109,11 @@ describe("http app", () => {
           transcriptionModel: { ok: false, detail: "Not configured." },
         };
       },
+      // Records the slot the route decided to list against, same reason as checked.
+      listModels: async (slot) => {
+        listed.push(slot);
+        return ["model-a", "model-b"];
+      },
       password: PASSWORD,
       serveMedia: createLocalMediaServer(rootDir),
     });
@@ -153,6 +160,7 @@ describe("http app", () => {
           start: async () => ({ id: "x", resourceId: "x", phase: "queued" }),
         } as never,
         checkSettings: (() => {}) as never,
+        listModels: (() => {}) as never,
         podcastFeed: {} as never,
         textModel: () => ({}) as never,
       });
@@ -284,6 +292,66 @@ describe("http app", () => {
       assert.equal(stored?.textModel.model, "m2", "the rest of the edit still applies");
       assert.equal(stored?.transcriptionModel.apiKey, "sk-brand-new");
       assert.equal(stored?.nativeLanguage, "en");
+    });
+
+    it("hands back the real keys only from the reveal route", async () => {
+      await storage.writeDoc("settings.json", {
+        textModel: { baseUrl: "https://a", apiKey: "sk-supersecret1234", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+        nativeLanguage: "zh-CN",
+        targetLanguage: "ja",
+      });
+
+      const response = await app.request("/api/settings/reveal", { headers: auth });
+      const body = (await response.json()) as Settings;
+
+      assert.equal(body.textModel.apiKey, "sk-supersecret1234");
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    });
+
+    it("lists models for the key behind a mask, not the mask itself", async () => {
+      await storage.writeDoc("settings.json", {
+        textModel: { baseUrl: "https://a", apiKey: "sk-supersecret1234", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+        nativeLanguage: "zh-CN",
+        targetLanguage: "ja",
+      });
+
+      const response = await app.request("/api/settings/models/textModel", {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          textModel: { baseUrl: "https://a", apiKey: "••••1234", model: "" },
+          transcriptionModel: { baseUrl: "https://a", apiKey: "sk-keep-me", model: "w" },
+          nativeLanguage: "zh-CN",
+          targetLanguage: "ja",
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { models: ["model-a", "model-b"] });
+      assert.equal(
+        listed[0]?.apiKey,
+        "sk-supersecret1234",
+        "listing with the mask itself would fail against every provider",
+      );
+    });
+
+    it("rejects a field that is not one of the two slots", async () => {
+      const slot = { baseUrl: "https://a", apiKey: "k", model: "m" };
+      const response = await app.request("/api/settings/models/nope", {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({
+          textModel: slot,
+          transcriptionModel: slot,
+          nativeLanguage: "en",
+          targetLanguage: "ja",
+        }),
+      });
+
+      assert.equal(response.status, 400);
+      assert.deepEqual(listed, []);
     });
 
     it("refuses a malformed body instead of storing half of it", async () => {
@@ -495,6 +563,7 @@ describe("http app", () => {
         importJobs: {} as never,
         podcastFeed: {} as never,
         checkSettings: (() => {}) as never,
+        listModels: (() => {}) as never,
         password: PASSWORD,
         textModel: () => ({
           complete: async () => {

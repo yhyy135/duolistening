@@ -41,33 +41,33 @@ docs/adr/       why things are the way they are
 
 `src/server/ports.ts` is the map. Every interface lives there with its invariants and error modes documented; the implementation files hold no interface declarations of their own.
 
-| Module                              | What it hides                                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `storage/local.ts`, `storage/s3.ts` | All persistence, behind one `Storage` seam. Local also exports `createLocalMediaServer` (HTTP Range serving) |
-| `library.ts`                        | The shelf: list/get/save/remove/savePosition, with cascade delete and a write mutex                          |
-| `ingest.ts`                         | yt-dlp for YouTube, HTTP download for podcast enclosures, plus error classification                          |
-| `podcast-feed.ts`                   | RSS fetching and parsing                                                                                     |
-| `transcriber.ts`                    | **The deepest module.** Silence-aware chunking, per-chunk calls, timestamp offsetting, stitching             |
-| `audio/ffmpeg.ts`                   | ffprobe duration, silencedetect, range extraction                                                            |
-| `audio/speech-to-text.ts`           | One `/audio/transcriptions` call, and word-list-to-segment assignment                                        |
-| `annotator.ts`                      | Batched translation, plus Japanese tokens. Owns the "is it Japanese" branch                                  |
-| `japanese.ts`                       | kuromoji: morphemes, part-of-speech mapping, katakana→hiragana readings                                      |
-| `text-model.ts`                     | `/chat/completions` calls — plain, JSON-repaired, or streamed — retry policy for the first two               |
-| `model-check.ts`                    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                |
-| `import-jobs.ts`                    | ingest → transcribe → annotate as a background job, with progress — and the retry that resumes one           |
-| `app.ts`                            | HTTP routes and the access gate. Takes every dependency; touches no env                                      |
-| `main.ts`                           | Composition root. The only file that reads `process.env`                                                     |
+| Module                              | What it hides                                                                                                                     |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `storage/local.ts`, `storage/s3.ts` | All persistence, behind one `Storage` seam. Local also exports `createLocalMediaServer` (HTTP Range serving)                      |
+| `library.ts`                        | The shelf: list/get/save/remove/savePosition, with cascade delete and a write mutex                                               |
+| `ingest.ts`                         | yt-dlp for YouTube, HTTP download for podcast enclosures, plus error classification                                               |
+| `podcast-feed.ts`                   | RSS fetching and parsing                                                                                                          |
+| `transcriber.ts`                    | **The deepest module.** Silence-aware chunking, per-chunk calls, timestamp offsetting, stitching                                  |
+| `audio/ffmpeg.ts`                   | ffprobe duration, silencedetect, range extraction                                                                                 |
+| `audio/speech-to-text.ts`           | One `/audio/transcriptions` call, and word-list-to-segment assignment                                                             |
+| `annotator.ts`                      | Batched translation, plus Japanese tokens. Owns the "is it Japanese" branch                                                       |
+| `japanese.ts`                       | kuromoji: morphemes, part-of-speech mapping, katakana→hiragana readings                                                           |
+| `text-model.ts`                     | `/chat/completions` calls — plain, JSON-repaired, or streamed — retry policy for the first two, plus `listModels` (`GET /models`) |
+| `model-check.ts`                    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                                     |
+| `import-jobs.ts`                    | ingest → transcribe → annotate as a background job, with progress — and the retry that resumes one                                |
+| `app.ts`                            | HTTP routes and the access gate. Takes every dependency; touches no env                                                           |
+| `main.ts`                           | Composition root. The only file that reads `process.env`                                                                          |
 
 The web half has one seam of its own, and it is the same idea: `web/api.ts` is the
 only file that knows the server exists. Everything above it deals in model types.
 
-| Module             | What it hides                                                            |
-| ------------------ | ------------------------------------------------------------------------ |
-| `web/api.ts`       | Every route, status code, `EventSource` and the session cookie           |
-| `web/app.tsx`      | The access gate, the hash route, the header                              |
-| `web/library.tsx`  | The shelf, the one paste-a-link box, and live import progress            |
-| `web/player.tsx`   | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI |
-| `web/settings.tsx` | The two model slots and the language pair                                |
+| Module             | What it hides                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `web/api.ts`       | Every route, status code, `EventSource` and the session cookie                       |
+| `web/app.tsx`      | The access gate, the hash route, the header                                          |
+| `web/library.tsx`  | The shelf, the one paste-a-link box, and live import progress                        |
+| `web/player.tsx`   | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI             |
+| `web/settings.tsx` | The two model slots, the language pair, revealing a masked key, and the model picker |
 
 ## Invariants that are easy to break
 
@@ -83,6 +83,7 @@ Every one of these was a real bug caught by a test. If you change the code near 
 - **Furigana comes from kuromoji's `reading`, not `pronunciation`.** `pronunciation` writes long vowels as ー (ショーカイ); furigana is written しょうかい. (`japanese.ts`)
 - **`Word` and `Token` are different things.** Word = audio timing from the ASR. Token = morphology from kuromoji. Japanese has no spaces, so their boundaries genuinely disagree; never merge the two arrays. Reconciling them for display is `tokenWords`' job, and it happens at render time — a Token never gains a timestamp (ADR 0005).
 - **A masked API key means "unchanged".** Anything starting with `••••` is the value we showed the browser; storing it would wipe the real key on any settings save. The connection check runs the edit through the same `applySettingsEdit`, so testing a slot you did not retype probes the stored key rather than the mask. (`settings.ts`, `app.ts`)
+- **`GET /api/settings/reveal` is the one place the real keys leave the server.** Every other settings response is `maskSettings`'d, including the one the browser's own PUT request gets back. The Settings screen's "Show" button calls this on demand rather than the screen just always holding the real key, and the route sends `cache-control: no-store` since it is the one response in the app carrying an unmasked secret. Listing models (`POST /api/settings/models/:field`) resolves a masked key the same way `check` and save do — through `applySettingsEdit` — so it never sends the literal `"••••"` to a provider. (`app.ts`, `settings.ts`, `web/settings.tsx`)
 - **The connection check calls the endpoint the pipeline calls.** A cheaper probe — listing `/models`, or just resolving the host — passes for a model name that does not exist and for a provider that cannot transcribe at all. The transcription slot therefore gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio" and would fail a working slot. (`model-check.ts`)
 - **Storage keys are untrusted.** They carry ids that came off a URL; `..` escapes the root on the local adapter. Both adapters validate. (`storage/key.ts`)
 - **The access gate covers `/api/*` and `/media/*` only.** The SPA shell must load before anyone can be asked for a password. (`app.ts`)

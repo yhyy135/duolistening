@@ -653,6 +653,21 @@ button.ask {
   color: var(--ink);
   font-size: 1rem;
 }
+/* An input plus a button that acts on it — Show beside the API key, Fetch models
+   beside the Model field — laid out as one row instead of stacked underneath. */
+.settings .field-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.settings .field-row input {
+  flex: 1;
+  min-width: 0;
+}
+.settings .field-row button {
+  flex: none;
+  white-space: nowrap;
+}
 
 .settings .actions {
   display: flex;

@@ -26,6 +26,8 @@ export interface AppOptions {
   textModel: (settings: Settings) => TextModel;
   /** Tries both model slots for real; see model-check.ts. */
   checkSettings: (settings: Settings) => Promise<SettingsCheck>;
+  /** Lists the models at one slot's base URL, for the Settings screen's model picker. */
+  listModels: (slot: ModelSlot) => Promise<string[]>;
   /**
    * The shared access gate (ADR 0001). Leaving it empty disables the gate, which is
    * reasonable on a laptop and reckless on a public host — main.ts says so loudly.
@@ -111,6 +113,37 @@ export function createApp(options: AppOptions) {
 
     const merged = applySettingsEdit(await readSettings(storage), edit);
     return context.json(await options.checkSettings(merged));
+  });
+
+  /**
+   * The literal stored keys, for the Settings screen's "Show" action — every other
+   * response in this file only ever hands the browser a masked one (settings.ts).
+   * no-store, because this is the one response carrying an unmasked secret, and a
+   * cache is exactly where it should not linger.
+   */
+  app.get("/api/settings/reveal", async (context) => {
+    context.header("cache-control", "no-store");
+    return context.json(await readSettings(storage));
+  });
+
+  /**
+   * Lists the models available at one slot's base URL, for the model picker next to
+   * that slot's Model field. The body is the same shape /check takes — the whole
+   * Settings object, masked keys and all — merged the same way, so listing models
+   * for a slot you did not retype tries the key that is actually stored rather than
+   * the literal mask.
+   */
+  app.post("/api/settings/models/:field", async (context) => {
+    const field = context.req.param("field");
+    if (field !== "textModel" && field !== "transcriptionModel") {
+      return context.json({ error: "unknown field" }, 400);
+    }
+
+    const edit = parseSettings(await readJson<unknown>(context.req.raw));
+    if (!edit) return context.json({ error: "malformed settings" }, 400);
+
+    const merged = applySettingsEdit(await readSettings(storage), edit);
+    return context.json({ models: await options.listModels(merged[field]) });
   });
 
   app.get("/api/library", async (context) => context.json(await library.list()));

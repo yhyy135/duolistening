@@ -23,7 +23,7 @@ import type { JapaneseTokenizer, Storage } from "./ports.ts";
 import { readSettings } from "./settings.ts";
 import { createLocalMediaServer, createLocalStorage } from "./storage/local.ts";
 import { createS3Storage } from "./storage/s3.ts";
-import { createTextModel } from "./text-model.ts";
+import { createTextModel, listModels } from "./text-model.ts";
 import { createTranscriber } from "./transcriber.ts";
 
 const env = process.env;
@@ -72,6 +72,7 @@ const app = createApp({
     textModel: textModelFor,
     speechToText: speechToTextFor,
   }),
+  listModels,
   password,
   ...(serveMedia && { serveMedia }),
 });

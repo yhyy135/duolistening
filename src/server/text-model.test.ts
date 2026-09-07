@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ModelSlot } from "../shared/model.ts";
-import { ModelError, createTextModel } from "./text-model.ts";
+import { ModelError, createTextModel, listModels } from "./text-model.ts";
 
 const slot: ModelSlot = {
   baseUrl: "https://api.example.com/v1/",
@@ -188,6 +188,54 @@ describe("text model", () => {
       const fetch = stubFetch(fails(503));
       await assert.rejects(collect(model(fetch).completeStream("hi")));
       assert.equal(fetch.calls.length, 1);
+    });
+  });
+
+  describe("listModels", () => {
+    it("lists model ids from the OpenAI-compatible /models shape, sorted", async () => {
+      const fetch = stubFetch(
+        new Response(JSON.stringify({ data: [{ id: "gpt-4o-mini" }, { id: "gpt-4o" }] }), {
+          status: 200,
+        }),
+      );
+
+      assert.deepEqual(await listModels(slot, fetch), ["gpt-4o", "gpt-4o-mini"]);
+      assert.equal(fetch.calls[0]?.url, "https://api.example.com/v1/models");
+    });
+
+    it("sends the key as a bearer token, same as every other call", async () => {
+      let seenAuth: string | null = null;
+      const fetch = (async (_url: string | URL, init?: RequestInit) => {
+        seenAuth =
+          (init?.headers as Record<string, string> | undefined)?.["authorization"] ?? null;
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }) as unknown as typeof globalThis.fetch;
+
+      await listModels(slot, fetch);
+      assert.equal(seenAuth, "Bearer sk-test");
+    });
+
+    it("rejects with the same reasons a chat call would", async () => {
+      const fetch = stubFetch(fails(401));
+      await assert.rejects(listModels(slot, fetch), (error: ModelError) => {
+        assert.equal(error.reason, "auth");
+        return true;
+      });
+    });
+
+    it("rejects rather than calling out with no base URL", async () => {
+      await assert.rejects(listModels({ ...slot, baseUrl: "" }), (error: ModelError) => {
+        assert.equal(error.reason, "bad_request");
+        return true;
+      });
+    });
+
+    it("rejects a response with no data array", async () => {
+      const fetch = stubFetch(new Response(JSON.stringify({ oops: true }), { status: 200 }));
+      await assert.rejects(listModels(slot, fetch), (error: ModelError) => {
+        assert.equal(error.reason, "bad_response");
+        return true;
+      });
     });
   });
 });
