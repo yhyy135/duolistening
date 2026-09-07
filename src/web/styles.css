@@ -217,22 +217,20 @@ main {
   color: var(--bad);
 }
 
-/* ---- gate ---- */
-
-.gate {
-  margin: auto;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  width: min(20rem, 90vw);
-}
-
 /* ---- library ---- */
 
 .import form {
   display: flex;
   gap: 0.5rem;
+}
+
+/* Layout only, no colour: the buttons are already .ghost, which the palette owns. */
+.backup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
 }
 .import input {
   flex: 1;

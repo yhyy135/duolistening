@@ -18,9 +18,6 @@ const en = {
   "theme.dark": "Dark",
   "nav.settings": "Settings",
 
-  "gate.password": "Password",
-  "gate.enter": "Enter",
-  "gate.wrongPassword": "Wrong password",
 
   "common.loading": "Loading…",
   "common.back": "← Back",
@@ -106,9 +103,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "深色",
     "nav.settings": "设置",
 
-    "gate.password": "密码",
-    "gate.enter": "进入",
-    "gate.wrongPassword": "密码错误",
 
     "common.loading": "加载中…",
     "common.back": "← 返回",
@@ -188,9 +182,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "深色",
     "nav.settings": "設定",
 
-    "gate.password": "密碼",
-    "gate.enter": "進入",
-    "gate.wrongPassword": "密碼錯誤",
 
     "common.loading": "載入中…",
     "common.back": "← 返回",
@@ -270,9 +261,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "ダーク",
     "nav.settings": "設定",
 
-    "gate.password": "パスワード",
-    "gate.enter": "入る",
-    "gate.wrongPassword": "パスワードが違います",
 
     "common.loading": "読み込み中…",
     "common.back": "← 戻る",
@@ -352,9 +340,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "어둡게",
     "nav.settings": "설정",
 
-    "gate.password": "비밀번호",
-    "gate.enter": "들어가기",
-    "gate.wrongPassword": "비밀번호가 틀렸습니다",
 
     "common.loading": "불러오는 중…",
     "common.back": "← 뒤로",
@@ -434,9 +419,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "Oscuro",
     "nav.settings": "Ajustes",
 
-    "gate.password": "Contraseña",
-    "gate.enter": "Entrar",
-    "gate.wrongPassword": "Contraseña incorrecta",
 
     "common.loading": "Cargando…",
     "common.back": "← Volver",
@@ -516,9 +498,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "Sombre",
     "nav.settings": "Réglages",
 
-    "gate.password": "Mot de passe",
-    "gate.enter": "Entrer",
-    "gate.wrongPassword": "Mot de passe incorrect",
 
     "common.loading": "Chargement…",
     "common.back": "← Retour",
@@ -598,9 +577,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.dark": "Dunkel",
     "nav.settings": "Einstellungen",
 
-    "gate.password": "Passwort",
-    "gate.enter": "Weiter",
-    "gate.wrongPassword": "Falsches Passwort",
 
     "common.loading": "Lädt…",
     "common.back": "← Zurück",

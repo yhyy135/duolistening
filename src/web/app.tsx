@@ -1,13 +1,18 @@
-// The shell: the access gate, the hash route, and the header. Every screen below it
-// assumes the session is already good.
+// The shell: the hash route and the header.
+//
+// There is no access gate any more, and its absence is the point rather than an
+// omission. ADR 0001 added a single shared password because a deployment held one
+// person's API keys and Library on a server anyone could find. ADR 0008 moved all
+// of that into the reader's own browser, so a stranger who loads this page gets an
+// empty one — there is nothing on the other side of a gate to protect.
 
 import { useEffect, useState } from "react";
 import type { LanguageCode } from "../shared/model.ts";
-import { ApiError, api, reason, setOnUnauthorized } from "./api.ts";
 import { LOCALE_KEY, LocaleContext, useT } from "./i18n.ts";
 import { LibraryScreen } from "./library.tsx";
 import { PlayerScreen } from "./player.tsx";
 import { SettingsScreen } from "./settings.tsx";
+import { readSettings } from "./store.ts";
 
 /**
  * Auto, and the two ways to overrule it. Auto is stored and applied as the absence of
@@ -48,22 +53,24 @@ function useHash(): string {
 }
 
 /**
- * The Native Language, which is what every label on every screen is written in. Read
- * from Settings once the gate is open, and remembered locally so the gate itself —
- * which is drawn before any request can succeed — is already in the right language.
+ * The Native Language, which is what every label on every screen is written in.
+ *
+ * Cached in localStorage and read from there synchronously, so the first paint is
+ * already in the right language. Settings live in IndexedDB, which cannot be read
+ * before a render, and a shell that flashed English on every load would be exactly
+ * what someone who set their language is trying to avoid.
  */
-function useLocale(gateOpen: boolean): [LanguageCode, (code: LanguageCode) => void] {
+function useLocale(): [LanguageCode, (code: LanguageCode) => void] {
   const [locale, setLocale] = useState<LanguageCode>(
     () => (localStorage.getItem(LOCALE_KEY) as LanguageCode | null) ?? "en",
   );
 
   useEffect(() => {
-    if (!gateOpen) return;
-    api.settings().then(
-      (settings) => setLocale(settings.nativeLanguage),
+    readSettings().then(
+      (settings) => settings && setLocale(settings.nativeLanguage),
       () => undefined,
     );
-  }, [gateOpen]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(LOCALE_KEY, locale);
@@ -74,33 +81,15 @@ function useLocale(gateOpen: boolean): [LanguageCode, (code: LanguageCode) => vo
 }
 
 export function App() {
-  const [gate, setGate] = useState<"checking" | "locked" | "open">("checking");
-  const [locale, setLocale] = useLocale(gate === "open");
-
-  useEffect(() => {
-    setOnUnauthorized(() => setGate("locked"));
-    api.session().then(
-      () => setGate("open"),
-      () => setGate("locked"),
-    );
-  }, []);
-
+  const [locale, setLocale] = useLocale();
   return (
     <LocaleContext.Provider value={locale}>
-      <Shell gate={gate} onOpen={() => setGate("open")} onLocale={setLocale} />
+      <Shell onLocale={setLocale} />
     </LocaleContext.Provider>
   );
 }
 
-function Shell({
-  gate,
-  onOpen,
-  onLocale,
-}: {
-  gate: "checking" | "locked" | "open";
-  onOpen: () => void;
-  onLocale: (code: LanguageCode) => void;
-}) {
+function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
   const [theme, cycleTheme] = useTheme();
   const hash = useHash();
   const t = useT();
@@ -109,9 +98,6 @@ function Shell({
     light: t("theme.light"),
     dark: t("theme.dark"),
   };
-
-  if (gate === "checking") return <p className="notice">…</p>;
-  if (gate === "locked") return <Gate onOpen={onOpen} />;
 
   const resourceId = hash.startsWith("#/r/") ? decodeURIComponent(hash.slice(4)) : null;
   return (
@@ -140,40 +126,3 @@ function Shell({
   );
 }
 
-/**
- * The single shared password (ADR 0001). A successful POST sets the session cookie,
- * so nothing is kept here — reloading the page stays logged in, and so does the
- * <audio> element, which cannot send a header of its own.
- */
-function Gate({ onOpen }: { onOpen: () => void }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const t = useT();
-
-  return (
-    <form
-      className="gate"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        try {
-          await api.login(password);
-          onOpen();
-        } catch (failure) {
-          setError(failure instanceof ApiError ? t("gate.wrongPassword") : reason(failure));
-        }
-      }}
-    >
-      <h1>duolistening</h1>
-      <input
-        type="password"
-        autoFocus
-        placeholder={t("gate.password")}
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-      />
-      <button type="submit">{t("gate.enter")}</button>
-      {error && <p className="error">{error}</p>}
-    </form>
-  );
-}
