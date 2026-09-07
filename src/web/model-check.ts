@@ -207,7 +207,11 @@ export function quietTone(): Uint8Array<ArrayBuffer> {
   view.setUint32(40, samples * 2, true);
 
   for (let index = 0; index < samples; index++) {
-    view.setInt16(44 + index * 2, Math.round(Math.sin((2 * Math.PI * 440 * index) / rate) * 3000), true);
+    view.setInt16(
+      44 + index * 2,
+      Math.round(Math.sin((2 * Math.PI * 440 * index) / rate) * 3000),
+      true,
+    );
   }
   return bytes;
 }

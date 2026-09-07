@@ -122,7 +122,9 @@ export async function handle(
   const expected = params.get("total");
   const actual = upstream.headers.get("content-range")?.split("/")[1];
   if (expected && actual && expected !== actual) {
-    return cors(text(`file changed under us: expected ${expected} bytes, origin now ${actual}`, 409));
+    return cors(
+      text(`file changed under us: expected ${expected} bytes, origin now ${actual}`, 409),
+    );
   }
 
   // The caller asked for a slice, but whoever transcribes it must see a whole file:
@@ -180,4 +182,6 @@ function cors(response: Response): Response {
   return response;
 }
 
-export default { fetch: (request: Request, env: Env) => handle(request, globalThis.fetch, env) };
+export default {
+  fetch: (request: Request, env: Env) => handle(request, globalThis.fetch, env),
+};

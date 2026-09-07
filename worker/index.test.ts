@@ -25,10 +25,7 @@ test("a byte range comes back as a whole file, not a 206", async () => {
   const upstream = fakeFetch(
     audio(206, { "content-range": "bytes 0-7/999999", "content-length": "8" }),
   );
-  const response = await handle(
-    ask("url=https://host.example/ep.mp3&start=0&end=7"),
-    upstream,
-  );
+  const response = await handle(ask("url=https://host.example/ep.mp3&start=0&end=7"), upstream);
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-range"), null);
@@ -65,9 +62,7 @@ test("the origin always sees one User-Agent, so ad splicing cannot vary the file
 });
 
 test("a total that no longer matches is a 409, not a misaligned seam", async () => {
-  const moved = fakeFetch(
-    audio(206, { "content-range": "bytes 26000001-44263130/44263131" }),
-  );
+  const moved = fakeFetch(audio(206, { "content-range": "bytes 26000001-44263130/44263131" }));
   const response = await handle(
     ask("url=https://host.example/ep.mp3&start=26000001&total=43421257"),
     moved,
@@ -75,10 +70,7 @@ test("a total that no longer matches is a 409, not a misaligned seam", async () 
   assert.equal(response.status, 409);
 
   const same = fakeFetch(audio(206, { "content-range": "bytes 0-7/43421257" }));
-  const ok = await handle(
-    ask("url=https://host.example/ep.mp3&start=0&total=43421257"),
-    same,
-  );
+  const ok = await handle(ask("url=https://host.example/ep.mp3&start=0&total=43421257"), same);
   assert.equal(ok.status, 200);
 });
 
@@ -90,7 +82,9 @@ test("every answer carries CORS, errors included", async () => {
 });
 
 test("refuses to be a general web proxy", async () => {
-  const html = fakeFetch(new Response("<h1>hi</h1>", { headers: { "content-type": "text/html" } }));
+  const html = fakeFetch(
+    new Response("<h1>hi</h1>", { headers: { "content-type": "text/html" } }),
+  );
   const response = await handle(ask("url=https://host.example/page"), html);
   assert.equal(response.status, 415);
 });
@@ -112,11 +106,19 @@ test("ALLOWED_HOSTS covers subdomains but not lookalikes", async () => {
   const fail = ["evil-archive.org", "archive.org.evil.com", "elsewhere.example"];
 
   for (const host of pass) {
-    const response = await handle(ask(`url=https://${host}/ep.mp3`), fakeFetch(audio(200)), env);
+    const response = await handle(
+      ask(`url=https://${host}/ep.mp3`),
+      fakeFetch(audio(200)),
+      env,
+    );
     assert.equal(response.status, 200, `${host} should pass`);
   }
   for (const host of fail) {
-    const response = await handle(ask(`url=https://${host}/ep.mp3`), fakeFetch(audio(200)), env);
+    const response = await handle(
+      ask(`url=https://${host}/ep.mp3`),
+      fakeFetch(audio(200)),
+      env,
+    );
     assert.equal(response.status, 403, `${host} should be refused`);
   }
 });

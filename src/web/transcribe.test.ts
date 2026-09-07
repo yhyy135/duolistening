@@ -73,7 +73,11 @@ test("an episode under the limit is one request and no planning at all", async (
 
   const lines = await transcribe({ ...fake, sliceUrl, totalBytes: small });
 
-  assert.deepEqual(fake.asked, [{ startByte: 0, endByte: TOTAL - 1 }], "asked for the whole file");
+  assert.deepEqual(
+    fake.asked,
+    [{ startByte: 0, endByte: TOTAL - 1 }],
+    "asked for the whole file",
+  );
   assert.ok(lines.length > 0);
   assert.equal(lines[0]?.startSec, 0);
 });
@@ -119,8 +123,14 @@ test("a short remainder is halved rather than left as its own tiny chunk", () =>
 
 test("the truncated segment is dropped from every chunk but the last", () => {
   const done = result();
-  assert.deepEqual(keptSegments(done, false).map((s) => s.text), ["one", "two"]);
-  assert.deepEqual(keptSegments(done, true).map((s) => s.text), ["one", "two", "cut in half"]);
+  assert.deepEqual(
+    keptSegments(done, false).map((s) => s.text),
+    ["one", "two"],
+  );
+  assert.deepEqual(
+    keptSegments(done, true).map((s) => s.text),
+    ["one", "two", "cut in half"],
+  );
 });
 
 test("stitching puts every chunk back on one timeline, words included", () => {
@@ -129,7 +139,12 @@ test("stitching puts every chunk back on one timeline, words included", () => {
       chunk: { startByte: 0, endByte: 99, startSec: 0 },
       durationSec: 30,
       segments: [
-        { startSec: 0, endSec: 10, text: " a ", words: [{ text: "a", startSec: 1, endSec: 2 }] },
+        {
+          startSec: 0,
+          endSec: 10,
+          text: " a ",
+          words: [{ text: "a", startSec: 1, endSec: 2 }],
+        },
         { startSec: 10, endSec: 20, text: "b" },
         { startSec: 20, endSec: 30, text: "dropped" },
       ],
@@ -141,11 +156,14 @@ test("stitching puts every chunk back on one timeline, words included", () => {
     },
   ]);
 
-  assert.deepEqual(lines.map((l) => [l.text, l.startSec, l.endSec]), [
-    ["a", 0, 10],
-    ["b", 10, 20],
-    ["c", 20, 30],
-  ]);
+  assert.deepEqual(
+    lines.map((l) => [l.text, l.startSec, l.endSec]),
+    [
+      ["a", 0, 10],
+      ["b", 10, 20],
+      ["c", 20, 30],
+    ],
+  );
   assert.deepEqual(lines[0]?.words, [{ text: "a", startSec: 1, endSec: 2 }]);
   // Absent, never empty — the player reads that to choose word- or line-level highlight.
   assert.equal("words" in lines[1]!, false);
@@ -157,7 +175,11 @@ test("a full episode comes back as one continuous timeline with no gap at the se
 
   assert.ok(fake.asked.length > 1, "needed more than one chunk");
   assert.equal(fake.asked[0]?.startByte, 0);
-  assert.equal(fake.asked.at(-1)?.endByte, TOTAL - 1, "the last chunk reaches the end of the file");
+  assert.equal(
+    fake.asked.at(-1)?.endByte,
+    TOTAL - 1,
+    "the last chunk reaches the end of the file",
+  );
   // Exactly one, or the tail was fetched and billed twice — which still stitches into
   // a continuous timeline, so continuity alone would not notice.
   assert.equal(fake.asked.filter((a) => a.endByte === TOTAL - 1).length, 1);
@@ -193,10 +215,19 @@ test("a variable bitrate file self-corrects instead of drifting", async () => {
 
 test("progress only ever moves forward and finishes at one", async () => {
   const seen: number[] = [];
-  await transcribe({ ...endpoint(), sliceUrl, totalBytes: TOTAL, onProgress: (p) => seen.push(p) });
+  await transcribe({
+    ...endpoint(),
+    sliceUrl,
+    totalBytes: TOTAL,
+    onProgress: (p) => seen.push(p),
+  });
 
   assert.ok(seen.length > 1);
-  assert.deepEqual(seen, [...seen].sort((a, b) => a - b), "went backwards");
+  assert.deepEqual(
+    seen,
+    [...seen].sort((a, b) => a - b),
+    "went backwards",
+  );
   assert.equal(seen.at(-1), 1);
 });
 

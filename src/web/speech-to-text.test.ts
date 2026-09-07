@@ -24,7 +24,10 @@ const body = (over: Partial<VerboseJson> = {}): VerboseJson => ({
 });
 
 const ok = (json: unknown) =>
-  new Response(JSON.stringify(json), { status: 200, headers: { "content-type": "application/json" } });
+  new Response(JSON.stringify(json), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 
 /** Records every request so the form fields can be asserted on. */
 function spy(...answers: Response[]) {
@@ -36,7 +39,14 @@ function spy(...answers: Response[]) {
     forms.push(init?.body as FormData);
     return answers[Math.min(call++, answers.length - 1)] ?? ok(body());
   };
-  return { impl, forms, urls, get calls() { return call; } };
+  return {
+    impl,
+    forms,
+    urls,
+    get calls() {
+      return call;
+    },
+  };
 }
 
 test("the endpoint is handed a url, never bytes", async () => {
@@ -60,17 +70,26 @@ test("both granularities are asked for, because word alone returns no segments",
 
 test("the language is sent only when there is one to send", async () => {
   const withLanguage = spy(ok(body()));
-  await createSpeechToText({ slot, fetch: withLanguage.impl }).transcribeUrl("https://p/", "ja");
+  await createSpeechToText({ slot, fetch: withLanguage.impl }).transcribeUrl(
+    "https://p/",
+    "ja",
+  );
   assert.equal(withLanguage.forms[0]?.get("language"), "ja");
 
   const without = spy(ok(body()));
   await createSpeechToText({ slot, fetch: without.impl }).transcribeUrl("https://p/");
-  assert.equal(without.forms[0]?.has("language"), false, "unset means let the endpoint detect it");
+  assert.equal(
+    without.forms[0]?.has("language"),
+    false,
+    "unset means let the endpoint detect it",
+  );
 });
 
 test("a provider that rejects granularities is retried without them", async () => {
   const fetch = spy(new Response("unknown field", { status: 400 }), ok(body()));
-  const result = await createSpeechToText({ slot, fetch: fetch.impl }).transcribeUrl("https://p/");
+  const result = await createSpeechToText({ slot, fetch: fetch.impl }).transcribeUrl(
+    "https://p/",
+  );
 
   assert.equal(fetch.calls, 2);
   assert.equal(fetch.forms[1]?.has("timestamp_granularities[]"), false);
@@ -143,8 +162,14 @@ test("words are assigned to the segment their midpoint falls in", () => {
     }),
   );
 
-  assert.deepEqual(segments[0]?.words?.map((w) => w.text), ["a"]);
-  assert.deepEqual(segments[1]?.words?.map((w) => w.text), ["b", "c"]);
+  assert.deepEqual(
+    segments[0]?.words?.map((w) => w.text),
+    ["a"],
+  );
+  assert.deepEqual(
+    segments[1]?.words?.map((w) => w.text),
+    ["b", "c"],
+  );
 });
 
 test("segments come back whole when the provider gave no word timing", () => {
@@ -164,7 +189,15 @@ test("a reply with only `text` and no segments is nothing, not one giant Line", 
 
 test("a segment missing its timestamps is dropped, not defaulted to zero", () => {
   const segments = toSegments(
-    body({ segments: [{ start: 0, end: 5, text: "keep" }, { end: 10, text: "no start" }] }),
+    body({
+      segments: [
+        { start: 0, end: 5, text: "keep" },
+        { end: 10, text: "no start" },
+      ],
+    }),
   );
-  assert.deepEqual(segments.map((s) => s.text), ["keep"]);
+  assert.deepEqual(
+    segments.map((s) => s.text),
+    ["keep"],
+  );
 });

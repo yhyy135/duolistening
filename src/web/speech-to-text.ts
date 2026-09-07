@@ -39,11 +39,15 @@ export interface VerboseJson {
 }
 
 export type TranscriptionErrorReason =
-  | "auth" | "rate_limit" | "server" | "network" | "too_large" | "bad_request" | "bad_response";
+  "auth" | "rate_limit" | "server" | "network" | "too_large" | "bad_request" | "bad_response";
 
 export class TranscriptionError extends Error {
   readonly reason: TranscriptionErrorReason;
-  constructor(reason: TranscriptionErrorReason, message: string, options?: { cause?: unknown }) {
+  constructor(
+    reason: TranscriptionErrorReason,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
     super(message, options);
     this.name = "TranscriptionError";
     this.reason = reason;
@@ -116,7 +120,10 @@ export function createSpeechToText(options: SpeechToTextOptions) {
  * waits twice as long for the same answer. The endpoint says so in the body.
  */
 async function looksTooLarge(response: Response): Promise<boolean> {
-  const text = await response.clone().text().catch(() => "");
+  const text = await response
+    .clone()
+    .text()
+    .catch(() => "");
   return /too.?large|size.?limit|exceed/i.test(text);
 }
 

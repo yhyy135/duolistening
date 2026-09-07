@@ -148,8 +148,13 @@ test("a retry with a Transcript but no audio fetches only the audio", async () =
   const store = fakeStore({ transcript: bare });
   const { deps: d, called } = deps({ store });
   const failed: Resource = {
-    id: "r1", source, title: "ep", durationSec: 12.5, nativeLanguage: "zh-CN",
-    importedAt: "2026-09-08T00:00:00.000Z", phase: "failed",
+    id: "r1",
+    source,
+    title: "ep",
+    durationSec: 12.5,
+    nativeLanguage: "zh-CN",
+    importedAt: "2026-09-08T00:00:00.000Z",
+    phase: "failed",
   };
 
   await retryImport(d, failed, () => {});
@@ -169,11 +174,19 @@ test("stored audio is never downloaded again", async () => {
 test("a finished Resource is not re-importable", async () => {
   const { deps: d, called } = deps();
   const ready: Resource = {
-    id: "r1", source, title: "ep", durationSec: 12.5, nativeLanguage: "zh-CN",
-    importedAt: "2026-09-08T00:00:00.000Z", phase: "ready",
+    id: "r1",
+    source,
+    title: "ep",
+    durationSec: 12.5,
+    nativeLanguage: "zh-CN",
+    importedAt: "2026-09-08T00:00:00.000Z",
+    phase: "ready",
   };
 
-  await assert.rejects(retryImport(d, ready, () => {}), /Delete it to import it again/);
+  await assert.rejects(
+    retryImport(d, ready, () => {}),
+    /Delete it to import it again/,
+  );
   assert.deepEqual(called, [], "touched nothing");
 });
 
@@ -192,7 +205,9 @@ test("a failure stays on the shelf, with its reason", async () => {
 });
 
 test("translations are saved batch by batch, not only at the end", async () => {
-  const partial = bare.map((line, index) => (index === 0 ? { ...line, translation: "半" } : line));
+  const partial = bare.map((line, index) =>
+    index === 0 ? { ...line, translation: "半" } : line,
+  );
   const store = fakeStore();
   /** What the store actually held at the moment a batch landed. */
   let seenMidway: Transcript | undefined;

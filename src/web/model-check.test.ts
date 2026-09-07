@@ -5,7 +5,8 @@ import { checkSettings, quietTone } from "./model-check.ts";
 
 const good: ModelSlot = { baseUrl: "https://api.example/v1", apiKey: "k", model: "m" };
 
-const chatOk = () => new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+const chatOk = () =>
+  new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
 
 /** Answers per endpoint, so the two slots can be given different fates. */
 function router(answers: { chat?: () => Response; audio?: () => Response } = {}) {
@@ -25,7 +26,11 @@ function router(answers: { chat?: () => Response; audio?: () => Response } = {})
 
 test("both slots are tried, and each is reported on its own", async () => {
   const fetch = router({ audio: () => new Response("no such model", { status: 400 }) });
-  const result = await checkSettings({ textModel: good, transcriptionModel: good, fetch: fetch.impl });
+  const result = await checkSettings({
+    textModel: good,
+    transcriptionModel: good,
+    fetch: fetch.impl,
+  });
 
   assert.equal(result.textModel.ok, true);
   assert.equal(result.transcriptionModel.ok, false);
@@ -39,7 +44,10 @@ test("each probe calls the endpoint the pipeline calls, not a cheaper one", asyn
   await checkSettings({ textModel: good, transcriptionModel: good, fetch: fetch.impl });
 
   // Listing /models would pass for a model name that does not exist.
-  assert.equal(fetch.urls.some((u) => u.endsWith("/models")), false);
+  assert.equal(
+    fetch.urls.some((u) => u.endsWith("/models")),
+    false,
+  );
   assert.deepEqual(fetch.urls.sort(), [
     "https://api.example/v1/audio/transcriptions",
     "https://api.example/v1/chat/completions",
@@ -79,7 +87,10 @@ function transcriptionRouter(byUrl: () => Response) {
 
 test("with a probe URL, the provider is also made to fetch one for itself", async () => {
   const fetch = transcriptionRouter(
-    () => new Response(JSON.stringify({ duration: 1, segments: [{ start: 0, end: 1, text: "ok" }] })),
+    () =>
+      new Response(
+        JSON.stringify({ duration: 1, segments: [{ start: 0, end: 1, text: "ok" }] }),
+      ),
   );
   const result = await checkSettings({
     textModel: good,
@@ -97,7 +108,9 @@ test("with a probe URL, the provider is also made to fetch one for itself", asyn
 test("a provider that cannot fetch a URL is flagged, and both causes are named", async () => {
   // What a provider with no `url` support answers, and what one answers when it
   // cannot reach a localhost origin. From here they look identical.
-  const fetch = transcriptionRouter(() => new Response("unknown parameter: url", { status: 400 }));
+  const fetch = transcriptionRouter(
+    () => new Response("unknown parameter: url", { status: 400 }),
+  );
   const result = await checkSettings({
     textModel: good,
     transcriptionModel: good,
@@ -113,7 +126,11 @@ test("a provider that cannot fetch a URL is flagged, and both causes are named",
 
 test("no probe URL means the upload probe alone, as before", async () => {
   const fetch = transcriptionRouter(() => new Response("never asked", { status: 500 }));
-  const result = await checkSettings({ textModel: good, transcriptionModel: good, fetch: fetch.impl });
+  const result = await checkSettings({
+    textModel: good,
+    transcriptionModel: good,
+    fetch: fetch.impl,
+  });
 
   assert.deepEqual(fetch.modes, ["file"]);
   assert.equal(result.transcriptionModel.ok, true);
@@ -135,14 +152,24 @@ test("a slot that cannot transcribe at all is not then asked to fetch a URL", as
 });
 
 test("an unconfigured slot says so without calling anything", async () => {
-  for (const slot of [{ ...good, baseUrl: "" }, { ...good, model: "  " }]) {
+  for (const slot of [
+    { ...good, baseUrl: "" },
+    { ...good, model: "  " },
+  ]) {
     const fetch = router();
-    const result = await checkSettings({ textModel: slot, transcriptionModel: good, fetch: fetch.impl });
+    const result = await checkSettings({
+      textModel: slot,
+      transcriptionModel: good,
+      fetch: fetch.impl,
+    });
 
     assert.equal(result.textModel.ok, false);
     assert.equal(result.textModel.detail, "Not configured.");
     // A blank base URL would otherwise fail as a confusing network error.
-    assert.equal(fetch.urls.some((u) => u.endsWith("/chat/completions")), false);
+    assert.equal(
+      fetch.urls.some((u) => u.endsWith("/chat/completions")),
+      false,
+    );
   }
 });
 
@@ -190,7 +217,10 @@ test("the probe clip is a real WAV, and is not digital silence", () => {
   // Some endpoints treat an all-zero clip as no audio and reject it, which would
   // report a working slot as broken.
   const samples = new Int16Array(wav.buffer, 44, (wav.length - 44) / 2);
-  assert.ok(samples.some((sample) => sample !== 0), "silence would fail a working slot");
+  assert.ok(
+    samples.some((sample) => sample !== 0),
+    "silence would fail a working slot",
+  );
   assert.ok(
     samples.every((sample) => Math.abs(sample) <= 3000),
     "quiet: loud enough to be audio, not loud enough to be unpleasant",

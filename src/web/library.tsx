@@ -48,7 +48,10 @@ export function LibraryScreen() {
     );
   }, []);
 
-  async function drive(id: string, work: (report: (p: ImportProgress) => void) => Promise<void>) {
+  async function drive(
+    id: string,
+    work: (report: (p: ImportProgress) => void) => Promise<void>,
+  ) {
     driving.current.add(id);
     setError(null);
     try {
@@ -125,7 +128,8 @@ export function LibraryScreen() {
                 <span className="meta">
                   {formatTime(resource.durationSec)}
                   {" · "}
-                  {resource.targetLanguage ?? t("library.autoLanguage")}→{resource.nativeLanguage}
+                  {resource.targetLanguage ?? t("library.autoLanguage")}→
+                  {resource.nativeLanguage}
                   {resource.lastPositionSec
                     ? ` · ${t("library.resume", { time: formatTime(resource.lastPositionSec) })}`
                     : ""}
@@ -155,7 +159,9 @@ export function LibraryScreen() {
                 className="ghost"
                 onBlur={() => setConfirming(null)}
                 onClick={() =>
-                  confirming === resource.id ? void remove(resource) : setConfirming(resource.id)
+                  confirming === resource.id
+                    ? void remove(resource)
+                    : setConfirming(resource.id)
                 }
               >
                 {confirming === resource.id ? t("common.sure") : t("common.delete")}

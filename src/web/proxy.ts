@@ -93,9 +93,13 @@ export function proxyUrl(
     url = new URL(proxy.baseUrl);
   } catch (cause) {
     // Otherwise this surfaces as a bare TypeError from somewhere deep in an import.
-    throw new ProxyError("not_configured", `The proxy base URL is not a URL: ${proxy.baseUrl}`, {
-      cause,
-    });
+    throw new ProxyError(
+      "not_configured",
+      `The proxy base URL is not a URL: ${proxy.baseUrl}`,
+      {
+        cause,
+      },
+    );
   }
 
   url.searchParams.set("url", target);
@@ -119,7 +123,11 @@ export function proxyUrl(
  * measured it: chunks two onward are the ones that would seam in the wrong place if
  * the file moved underneath them.
  */
-export function sliceUrls(proxy: ProxySettings | undefined, target: string, totalBytes: number) {
+export function sliceUrls(
+  proxy: ProxySettings | undefined,
+  target: string,
+  totalBytes: number,
+) {
   return (range?: { startByte: number; endByte: number }): string =>
     proxyUrl(proxy, target, range && { ...range, totalBytes });
 }
@@ -226,7 +234,9 @@ async function get(
   } catch (cause) {
     // A cross-origin failure reaches the page as an opaque TypeError with no detail,
     // so this one reason covers "wrong base URL", "not deployed" and "offline" alike.
-    throw new ProxyError("network", `Could not reach the proxy at ${proxy?.baseUrl}`, { cause });
+    throw new ProxyError("network", `Could not reach the proxy at ${proxy?.baseUrl}`, {
+      cause,
+    });
   }
 
   // The proxy turns a 206 into a 200 on the way through, so anything that is not ok

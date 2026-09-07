@@ -80,7 +80,12 @@ export function createJapaneseTokenizerOnce(dicPath: string): () => Promise<Japa
 /** Only what this file calls. `kuromoji` is what the UMD bundle names on `window`. */
 interface Kuromoji {
   builder(options: { dicPath: string }): {
-    build(done: (error: Error | null, tokenizer: { tokenize(text: string): IpadicFeatures[] }) => void): void;
+    build(
+      done: (
+        error: Error | null,
+        tokenizer: { tokenize(text: string): IpadicFeatures[] },
+      ) => void,
+    ): void;
   };
 }
 declare global {
@@ -119,9 +124,9 @@ function loadKuromoji(dicPath: string): Promise<Kuromoji> {
     // Alongside `dicPath`, so one build step controls where both halves live.
     script.src = `${dicPath.replace(/\/dict\/?$/, "")}/kuromoji.js`;
     script.onload = () =>
-      window.kuromoji ?
-        resolve(window.kuromoji)
-      : reject(new Error("kuromoji loaded but defined no global"));
+      window.kuromoji
+        ? resolve(window.kuromoji)
+        : reject(new Error("kuromoji loaded but defined no global"));
     script.onerror = () => reject(new Error(`Could not load ${script.src}`));
     document.head.append(script);
   });

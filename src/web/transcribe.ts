@@ -57,7 +57,8 @@ export function planFirst(totalBytes: number, limit = REQUEST_LIMIT_BYTES): Chun
 }
 
 /** Whether the whole episode fits in one request, in which case none of the rest runs. */
-export const fitsWhole = (totalBytes: number, limit = REQUEST_LIMIT_BYTES) => totalBytes <= limit;
+export const fitsWhole = (totalBytes: number, limit = REQUEST_LIMIT_BYTES) =>
+  totalBytes <= limit;
 
 /**
  * Where the next chunk starts, read off the last one's own transcript.
@@ -94,9 +95,11 @@ export function planNext(
 
   const remaining = totalBytes - startByte;
   const length =
-    remaining <= limit ? remaining
-    : remaining <= limit * MIN_TRAILING_FRACTION ? Math.ceil(remaining / 2)
-    : limit;
+    remaining <= limit
+      ? remaining
+      : remaining <= limit * MIN_TRAILING_FRACTION
+        ? Math.ceil(remaining / 2)
+        : limit;
 
   return {
     startByte,
@@ -193,7 +196,9 @@ export async function transcribe(deps: TranscribeDeps): Promise<Transcript> {
   if (fitsWhole(deps.totalBytes, limit)) {
     const whole = await deps.transcribeUrl(deps.sliceUrl());
     deps.onProgress?.(1);
-    return stitch([{ chunk: { startByte: 0, endByte: deps.totalBytes - 1, startSec: 0 }, ...whole }]);
+    return stitch([
+      { chunk: { startByte: 0, endByte: deps.totalBytes - 1, startSec: 0 }, ...whole },
+    ]);
   }
 
   const results: ChunkResult[] = [];

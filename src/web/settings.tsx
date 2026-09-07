@@ -217,7 +217,12 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
 
         <div className="actions">
           <button type="submit">{t("common.save")}</button>
-          <button type="button" className="ghost" disabled={checking} onClick={() => void test()}>
+          <button
+            type="button"
+            className="ghost"
+            disabled={checking}
+            onClick={() => void test()}
+          >
             {checking ? t("settings.testing") : t("settings.test")}
           </button>
           {status && <span className="notice">{status}</span>}
@@ -231,7 +236,13 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
  * A key field. `type="password"` and a toggle, which is the whole of what masking
  * has to be now: the value is already here, so revealing it asks nobody anything.
  */
-function SecretInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function SecretInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const [shown, setShown] = useState(false);
   const t = useT();
   return (
@@ -305,7 +316,12 @@ function Slot({
             list={datalistId}
             onChange={(event) => onChange({ ...slot, model: event.target.value })}
           />
-          <button type="button" className="ghost" disabled={fetchingModels} onClick={onFetchModels}>
+          <button
+            type="button"
+            className="ghost"
+            disabled={fetchingModels}
+            onClick={onFetchModels}
+          >
             {fetchingModels ? t("settings.fetching") : t("settings.fetchModels")}
           </button>
         </span>

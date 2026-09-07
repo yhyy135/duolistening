@@ -19,7 +19,12 @@ const transcript: Transcript = [
 function resource(over: Partial<Resource> = {}): Resource {
   return {
     id: "r1",
-    source: { kind: "podcast", feedUrl: "https://f.example", episodeUrl: "https://e.example/1.mp3", title: "ep" },
+    source: {
+      kind: "podcast",
+      feedUrl: "https://f.example",
+      episodeUrl: "https://e.example/1.mp3",
+      title: "ep",
+    },
     title: "ごん狐 01",
     durationSec: 315.86,
     nativeLanguage: "zh-CN",
@@ -29,7 +34,10 @@ function resource(over: Partial<Resource> = {}): Resource {
   };
 }
 
-const entry = (over: Partial<Resource> = {}): BackupEntry => ({ resource: resource(over), transcript });
+const entry = (over: Partial<Resource> = {}): BackupEntry => ({
+  resource: resource(over),
+  transcript,
+});
 
 /** Every secret carries a distinctive value, so the sweep below can hunt for them. */
 const SECRETS = ["gsk_text_secret", "gsk_audio_secret", "proxy_shared_secret"];
@@ -62,8 +70,14 @@ test("only finished Resources are exported, and the rest are named", () => {
     ],
   });
 
-  assert.deepEqual(backup.entries.map((e) => e.resource.id), ["done"]);
-  assert.deepEqual(excluded.map((r) => r.id), ["mid", "broke"]);
+  assert.deepEqual(
+    backup.entries.map((e) => e.resource.id),
+    ["done"],
+  );
+  assert.deepEqual(
+    excluded.map((r) => r.id),
+    ["mid", "broke"],
+  );
 });
 
 test("no secret survives an export, wherever in Settings it lives", () => {
@@ -100,7 +114,10 @@ test("no settings asked for, none written", () => {
 });
 
 test("a backup round-trips through JSON", () => {
-  const { backup } = buildBackup({ entries: [entry()], exportedAt: "2026-09-08T01:00:00.000Z" });
+  const { backup } = buildBackup({
+    entries: [entry()],
+    exportedAt: "2026-09-08T01:00:00.000Z",
+  });
   const parsed = parseBackup(JSON.stringify(backup));
 
   assert.equal(parsed.ok, true);
@@ -112,7 +129,10 @@ test("a bad envelope refuses the whole file", () => {
   const cases: [string, string][] = [
     ["not json at all", "not JSON"],
     ["[1,2,3]", "not a backup"],
-    [JSON.stringify({ format: "something-else", version: 1, entries: [] }), "not written by duolistening"],
+    [
+      JSON.stringify({ format: "something-else", version: 1, entries: [] }),
+      "not written by duolistening",
+    ],
     [JSON.stringify({ format: "duolistening-backup", entries: [] }), "no usable version"],
     [JSON.stringify({ format: "duolistening-backup", version: 1 }), "no entries"],
   ];
@@ -139,7 +159,10 @@ test("one corrupt entry is dropped and named; the good ones still import", () =>
       entries: [
         ...backup.entries,
         { resource: { ...resource({ id: "x" }), title: "No transcript" }, transcript: [] },
-        { resource: { ...resource({ id: "y" }), title: "Bad lines" }, transcript: [{ text: "hi" }] },
+        {
+          resource: { ...resource({ id: "y" }), title: "Bad lines" },
+          transcript: [{ text: "hi" }],
+        },
         { resource: { id: "", title: "No id" }, transcript },
         "not even an object",
       ],
@@ -148,7 +171,12 @@ test("one corrupt entry is dropped and named; the good ones still import", () =>
 
   assert.equal(parsed.ok, true);
   assert.deepEqual(parsed.ok && parsed.backup.entries.map((e) => e.resource.id), ["good"]);
-  assert.deepEqual(parsed.ok && parsed.skipped, ["No transcript", "Bad lines", "No id", "entry 5"]);
+  assert.deepEqual(parsed.ok && parsed.skipped, [
+    "No transcript",
+    "Bad lines",
+    "No id",
+    "entry 5",
+  ]);
 });
 
 test("import adds what is missing and never touches what is here", () => {
@@ -157,7 +185,10 @@ test("import adds what is missing and never touches what is here", () => {
   });
   const plan = planImport(["have", "other"], backup);
 
-  assert.deepEqual(plan.add.map((e) => e.resource.id), ["want"]);
+  assert.deepEqual(
+    plan.add.map((e) => e.resource.id),
+    ["want"],
+  );
   assert.deepEqual(plan.alreadyHere, [{ id: "have", title: "Already" }]);
 });
 
@@ -170,7 +201,10 @@ test("a file listing the same id twice queues it once", () => {
 test("settings are restored only on request", () => {
   const { backup } = buildBackup({ entries: [entry()], settings });
   assert.equal(planImport([], backup).settings, undefined);
-  assert.equal(planImport([], backup, { restoreSettings: true })?.settings?.nativeLanguage, "zh-CN");
+  assert.equal(
+    planImport([], backup, { restoreSettings: true })?.settings?.nativeLanguage,
+    "zh-CN",
+  );
 });
 
 test("re-fetched audio has to line up with the Transcript it was made from", () => {
@@ -181,6 +215,9 @@ test("re-fetched audio has to line up with the Transcript it was made from", () 
 });
 
 test("the filename sorts by date", () => {
-  assert.equal(backupFilename("2026-09-08T01:23:45.000Z"), "duolistening-backup-2026-09-08.json");
+  assert.equal(
+    backupFilename("2026-09-08T01:23:45.000Z"),
+    "duolistening-backup-2026-09-08.json",
+  );
   assert.equal(backupFilename(""), "duolistening-backup-undated.json");
 });

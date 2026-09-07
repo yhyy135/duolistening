@@ -1,123 +1,112 @@
 # duolistening
 
-A self-hosted listening-practice tool. Import a YouTube video or podcast episode, transcribe it with your own LLM keys, and study it through a lyrics-style transcript: the current line scrolls into view and highlights as it plays, your native-language translation sits under each line, and Japanese gets furigana and part-of-speech colouring.
+A listening-practice tool. Import a podcast episode, transcribe it with your own LLM keys, and study it through a lyrics-style transcript: the current line scrolls into view and highlights as it plays, your native-language translation sits under each line, and Japanese gets furigana and part-of-speech colouring.
 
-Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is. Ten decisions — but note that 0008–0010 are **accepted and not yet built**: they describe the refactor in progress on `dev`, and they supersede 0001, 0003 and 0007, which are what the code below still does.
+Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — ten decisions, one paragraph each. 0008–0010 are the recent ones and they supersede 0001, 0003 and 0007.
 
-**Status: both halves are complete and runnable.**
+**Everything lives in the reader's browser.** No server, no accounts, no database, no `data/` directory. Settings — API keys included — the shelf, Transcripts and audio blobs are all in IndexedDB, which is what lets several people share one deployment while each pays for their own transcription (ADR 0008). The only thing deployed beside the static page is a Cloudflare Worker that proxies bytes (ADR 0009).
 
 ## Commands
 
 ```bash
-npm test                                  # node:test, no framework
-npm run typecheck                         # tsc --noEmit
-npm run format                            # prettier
-npm run build                             # vite → dist/web, which main.ts then serves
-DUOLISTENING_PASSWORD=secret npm start    # boots on :3000
-
-npm run dev:server                        # node --watch on :3000
-npm run dev:web                           # vite on :5173, proxying /api and /media to :3000
+npm test          # node:test, no framework
+npm run typecheck # tsc --noEmit
+npm run format    # prettier
+npm run build     # assets + vite → dist/web
+npm run dev:web   # assets + vite on :5173
 ```
 
-`npm start` serves `dist/web` when it exists and warns that it is API-only when it
-doesn't, so **build before you start**. In dev, run both halves and use :5173.
+`assets` runs automatically before both `build` and `dev:web`. It writes the two things that must be served from the app's own origin: the Settings check's probe clip, and kuromoji's dictionary and bundle. Its output is gitignored.
 
-Environment: `DUOLISTENING_PASSWORD` (access gate — unset disables it, fine on a laptop, reckless in public), `DUOLISTENING_DATA_DIR` (default `./data`), `DUOLISTENING_S3_BUCKET` + `DUOLISTENING_S3_PREFIX` (switches storage to S3; credentials and `AWS_ENDPOINT_URL` come from the standard AWS variables), `PORT`.
+There are no external binaries. ffmpeg and yt-dlp went with the server.
 
-External binaries: **ffmpeg/ffprobe** and **yt-dlp** must be on PATH. Everything else is npm.
-The `Dockerfile` supplies all three; `compose.yaml` is the one-command way to run it.
+**Deploying** is two independent halves that know nothing about each other: `dist/web` on any static host, and `worker/` on Cloudflare. A reader points the page at a proxy from the Settings screen, so the page carries no configuration at all.
 
-Node 22.18+ (unflagged type stripping). Verified on 22.23 and 24.20 — the four
-`audio/ffmpeg.test.ts` cases are the only ones that need a real ffmpeg.
+**One deployment requirement**: whatever serves `dist/web` must not send `Content-Encoding: gzip` for `/kuromoji/dict/*`. Those files are gzip _content_ which kuromoji gunzips itself, not a transfer encoding — see the invariant below, which cost an hour.
+
+Node 22.18+ (unflagged type stripping).
 
 ## How the code is laid out
 
 ```
-src/shared/     the contract both halves import — model.ts (types) and locate.ts
-src/server/     ports.ts declares every seam; each module implements one
-src/web/        the SPA — one file per screen, plus api.ts
-docs/adr/       why things are the way they are
+src/shared/  the model and the pure logic — model.ts, locate.ts, i18n.ts
+src/web/     everything else: the pipeline and the four screens
+worker/      the byte proxy, deployed separately
+scripts/     what has to be generated into src/web/public before a build
+docs/adr/    why things are the way they are
 ```
 
-`src/server/ports.ts` is the map. Every interface lives there with its invariants and error modes documented; the implementation files hold no interface declarations of their own.
+There is no `ports.ts` any more. It existed to hold the seams a server needed; with one implementation of everything, each module declares the narrow shape it actually depends on — the Annotator asks for `completeJson`, not for a whole TextModel.
 
-| Module                              | What it hides                                                                                                                     |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `storage/local.ts`, `storage/s3.ts` | All persistence, behind one `Storage` seam. Local also exports `createLocalMediaServer` (HTTP Range serving)                      |
-| `library.ts`                        | The shelf: list/get/save/remove/savePosition, with cascade delete and a write mutex                                               |
-| `ingest.ts`                         | yt-dlp for YouTube, HTTP download for podcast enclosures, plus error classification                                               |
-| `podcast-feed.ts`                   | RSS fetching and parsing                                                                                                          |
-| `transcriber.ts`                    | **The deepest module.** Silence-aware chunking, per-chunk calls, timestamp offsetting, stitching                                  |
-| `audio/ffmpeg.ts`                   | ffprobe duration, silencedetect, range extraction                                                                                 |
-| `audio/speech-to-text.ts`           | One `/audio/transcriptions` call, and word-list-to-segment assignment                                                             |
-| `annotator.ts`                      | Batched translation, plus Japanese tokens. Owns the "is it Japanese" branch                                                       |
-| `japanese.ts`                       | kuromoji: morphemes, part-of-speech mapping, katakana→hiragana readings                                                           |
-| `text-model.ts`                     | `/chat/completions` calls — plain, JSON-repaired, or streamed — retry policy for the first two, plus `listModels` (`GET /models`) |
-| `model-check.ts`                    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                                     |
-| `import-jobs.ts`                    | ingest → transcribe → annotate as a background job, with progress — and the retry that resumes one                                |
-| `app.ts`                            | HTTP routes and the access gate. Takes every dependency; touches no env                                                           |
-| `main.ts`                           | Composition root. The only file that reads `process.env`                                                                          |
-
-The web half has one seam of its own, and it is the same idea: `web/api.ts` is the
-only file that knows the server exists. Everything above it deals in model types.
-
-| Module             | What it hides                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------ |
-| `web/api.ts`       | Every route, status code, `EventSource` and the session cookie                       |
-| `web/app.tsx`      | The access gate, the hash route, the header                                          |
-| `web/library.tsx`  | The shelf, the one paste-a-link box, and live import progress                        |
-| `web/player.tsx`   | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI             |
-| `web/settings.tsx` | The two model slots, the language pair, revealing a masked key, and the model picker |
-| `shared/i18n.ts`   | Every user-facing string, in all eight languages — including the ask-AI prompt       |
-| `web/i18n.ts`      | Which of them is in force: the Native Language, held in a context                    |
+| Module              | What it hides                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `store.ts`          | All persistence — IndexedDB, and the audio content-type correction on the way in    |
+| `backup.ts`         | The export document, and validating one someone hands back                          |
+| `pipeline.ts`       | The composition root: the only file that knows how the pieces fit together          |
+| `import.ts`         | ingest → transcribe → annotate, and the retry that resumes one                      |
+| `transcribe.ts`     | **The deepest module.** Byte-range chunking, ASR-placed seams, stitching            |
+| `speech-to-text.ts` | One `/audio/transcriptions` call in `url` mode, and word-list-to-segment assignment |
+| `text-model.ts`     | `/chat/completions` — plain, JSON-repaired, or streamed — plus `listModels`         |
+| `annotate.ts`       | Batched translation, plus Japanese Tokens. Owns the "is it Japanese" branch         |
+| `japanese.ts`       | kuromoji: loading it, morphemes, part-of-speech mapping, katakana→hiragana          |
+| `proxy.ts`          | Every URL the Worker understands, an episode's size, and the proxy's own check      |
+| `podcast-feed.ts`   | RSS fetching (through the proxy) and parsing                                        |
+| `model-check.ts`    | Trying both slots for real, so a typo surfaces in Settings and not mid-import       |
+| `app.tsx`           | The hash route, the header, the theme, the Native Language context                  |
+| `library.tsx`       | The shelf, the paste-a-link box, live import progress, and export/import            |
+| `player.tsx`        | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI            |
+| `settings.tsx`      | Two model slots, the proxy, the language pair, and the connection checks            |
+| `shared/i18n.ts`    | Every user-facing string, in all eight languages — including the ask-AI prompt      |
+| `web/i18n.ts`       | Which of them is in force: the Native Language, held in a context                   |
+| `worker/index.ts`   | Following a redirect, adding CORS, and serving a byte range as a whole file         |
 
 ## Invariants that are easy to break
 
-Every one of these was a real bug caught by a test. If you change the code near one, keep the test that guards it.
+Every one of these was a real bug. If you change the code near one, keep the test that guards it.
 
-- **A retry resumes; it never restarts.** A stored Transcript means annotate only; stored audio means skip the download. Restarting instead would re-download and pay the transcription bill again to recover from a rate-limited translation — making the cheapest failure the most expensive. The pipeline stores those intermediates precisely so this can work. (`import-jobs.ts`)
-- **Audio is written back only when it was just fetched.** On a resume it is already in the Library, and saving the restored copy would re-upload every byte to the same key. (`import-jobs.ts`)
-- **A job publishes `ready`/`failed` only after the Library write and temp cleanup finish.** The terminal phase is what stops a watcher; publishing early lets the UI read a stale shelf. (`import-jobs.ts`)
-- **`save` writes blobs then the shelf; `remove` rewrites the shelf then deletes blobs.** Mirror images, so a crash halfway leaves unreachable bytes, never a shelf entry pointing at a missing file. (`library.ts`)
-- **`words` is omitted, never `[]`.** An empty array reads as "word timing exists" and the player renders karaoke highlighting against nothing. (`transcriber.ts`, ADR 0004)
-- **Translations are matched back by index, never by position.** A model that drops or reorders one entry would otherwise shift every later translation onto the wrong Line — invisible in the UI, wrong everywhere. (`annotator.ts`)
-- **Audio chunk extraction re-encodes to AAC; it never stream-copies.** Chunks are always written as `.m4a`, and `-c copy` into that MP4 container fails outright for any source codec the container can't hold — mp3 chief among them, which is most podcasts. It only shows up once a recording is long enough to need chunking (over `maxChunkSeconds`, 20 minutes), which is why a 5-minute test import can work while a 26-minute one always failed. (`audio/ffmpeg.ts`, `transcriber.ts`)
+- **Audio is stored with its true content type, never an assumed one.** These files are MP3 — podcast enclosures nearly always are — while a pipeline naming them `.m4a` will tell `<audio>` they are AAC-in-MP4. Chrome sniffs content and hides it completely; Safari believes the label and refuses with `MEDIA_ERR_SRC_NOT_SUPPORTED`, except where an `ID3` header is magic enough to override it, so whether an episode plays comes down to coincidence. The magic bytes therefore beat the declaration, at one choke point. (`store.ts`)
+- **Whatever serves the kuromoji dictionary must not claim `Content-Encoding: gzip`.** The browser would decode it first, and kuromoji's unguarded gunzip then throws inside an XHR `onload` handler — where the exception eats the callback and the tokenizer hangs with no error anywhere. (`vite.config.ts` for dev; a deployment requirement in production)
+- **kuromoji is loaded as a classic script, not imported.** Its gunzip dependency ends in `}).call(this)` and keeps the result as its global, which is `window` in a classic script and `undefined` in an ES module. (`japanese.ts`)
+- **A retry resumes; it never restarts.** A stored Transcript means annotate only; stored audio means skip the download. Restarting would pay the transcription bill again to recover from a rate-limited translation, making the cheapest failure the most expensive. (`import.ts`)
+- **Audio is captured during the import, not streamed at playback.** One real host splices advertising per fetch — the same episode came back thirty seconds longer to a different client — so audio pulled next week would sit a whole ad break away from the timestamps made from it today. That is also why every byte goes through the proxy, which pins one User-Agent: a byte offset means nothing across two versions of a file. (`import.ts`, `worker/index.ts`)
+- **The last position is parked in `localStorage`, not written to IndexedDB, when the page is closing.** A transaction opened at `pagehide` is not reliably committed, and there is no beacon for IndexedDB. `localStorage` is synchronous, which is the feature here. The store folds it back in on the next read — from both `getResource` and `listResources`, because a deep link to the player never touches the shelf. (`store.ts`, `player.tsx`)
+- **A chunk that reached the end of the file is the last one.** Otherwise the seam rule drops its final segment as truncated and plans another chunk to re-transcribe the tail — paying twice and stitching the same words in again. Continuity checks do not notice, because the duplicate still lands on a consistent timeline. (`transcribe.ts`)
+- **Both timestamp granularities are requested.** Asking for `word` alone comes back with `segments: null`, and segments are what place the seam between chunks. (`speech-to-text.ts`)
+- **A transcription reply without a duration is refused.** That number is the byte-rate denominator the next chunk's seam is derived from; guessing it seams in the wrong place, silently. (`speech-to-text.ts`)
+- **`words` is omitted, never `[]`.** An empty array reads as "word timing exists" and the player renders karaoke highlighting against nothing. (`transcribe.ts`, ADR 0004)
+- **Translations are matched back by index, never by position.** A model that drops or reorders one entry would otherwise shift every later translation onto the wrong Line — invisible in the UI, wrong everywhere. (`annotate.ts`)
+- **No secret leaves in an export.** `forExport` blanks them, and `backup.test.ts` sweeps the exported object for the values rather than checking three field names — because naming fields is exactly what failed when `proxy.key` joined Settings. (`backup.ts`)
+- **An import only ever adds.** A colliding id means the same Resource, and the copy already here may hold a playback position the file does not. (`backup.ts`)
+- **The connection check calls the endpoint the pipeline calls, in the mode it calls it.** A cheaper probe passes for a model that does not exist; an upload-only probe passes for a provider that cannot fetch a `url`, which is how every import moves audio. The transcription slot gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio". (`model-check.ts`)
 - **Furigana comes from kuromoji's `reading`, not `pronunciation`.** `pronunciation` writes long vowels as ー (ショーカイ); furigana is written しょうかい. (`japanese.ts`)
-- **`Word` and `Token` are different things.** Word = audio timing from the ASR. Token = morphology from kuromoji. Japanese has no spaces, so their boundaries genuinely disagree; never merge the two arrays. Reconciling them for display is `tokenWords`' job, and it happens at render time — a Token never gains a timestamp (ADR 0005).
-- **The studied language is optional; the native language never is.** Unset means the transcription call omits `language` and the translation prompt names no source language — both providers detect it — so one shelf can hold Japanese, Spanish and English episodes. Japanese Tokens are then decided by the transcript's own text (kana; kanji alone could be Chinese), which is also why the Annotator takes the tokenizer as a thunk: only the Transcript knows whether that dictionary is worth loading. (`annotator.ts`, `audio/speech-to-text.ts`)
-- **The interface language _is_ the Native Language.** One setting, not two: someone reading Spanish translations reads Spanish buttons. It is cached in `localStorage` so the password gate — drawn before any API call can succeed — is already right, and the server stays the source of truth. The ask-AI prompt comes from the same table (`shared/i18n.ts`), asked in the native language, which is what makes the answer come back in it without a sentence instructing the model to. (`web/i18n.ts`, `app.ts`)
-- **A masked API key means "unchanged".** Anything starting with `••••` is the value we showed the browser; storing it would wipe the real key on any settings save. The connection check runs the edit through the same `applySettingsEdit`, so testing a slot you did not retype probes the stored key rather than the mask. (`settings.ts`, `app.ts`)
-- **`GET /api/settings/reveal` is the one place the real keys leave the server.** Every other settings response is `maskSettings`'d, including the one the browser's own PUT request gets back. The Settings screen's "Show" button calls this on demand rather than the screen just always holding the real key, and the route sends `cache-control: no-store` since it is the one response in the app carrying an unmasked secret. Listing models (`POST /api/settings/models/:field`) resolves a masked key the same way `check` and save do — through `applySettingsEdit` — so it never sends the literal `"••••"` to a provider. (`app.ts`, `settings.ts`, `web/settings.tsx`)
-- **The connection check calls the endpoint the pipeline calls.** A cheaper probe — listing `/models`, or just resolving the host — passes for a model name that does not exist and for a provider that cannot transcribe at all. The transcription slot therefore gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio" and would fail a working slot. (`model-check.ts`)
-- **Storage keys are untrusted.** They carry ids that came off a URL; `..` escapes the root on the local adapter. Both adapters validate. (`storage/key.ts`)
-- **The access gate covers `/api/*` and `/media/*` only.** The SPA shell must load before anyone can be asked for a password. (`app.ts`)
-- **`<audio>` cannot send headers**, so the gate accepts a cookie as well as a bearer token. (`app.ts`)
-- **`completeStream` never retries.** `complete` and `completeJson` retry a rate limit or a server error; streaming does not, because a retry after part of an answer has already reached the ask-AI popup would show a second answer appended under the first — worse than just stopping. (`text-model.ts`)
-- **A model failure after `/api/ask` starts streaming reaches the popup as more stream text, not a status code.** `streamText`'s HTTP status is committed before the model call is known to succeed, so there is no way to answer with 502 the way a non-streamed failure does; `onError` writes the failure message into the body instead, and the popup shows it exactly as it would show a real answer. (`app.ts`)
-- **The web half keeps no token.** `POST /api/session` sets an httpOnly cookie, and that cookie is what `fetch`, `<audio>` and `EventSource` all carry. Storing a bearer token instead would work for `fetch` and silently break the other two. (`web/api.ts`)
-- **An import's `EventSource` is closed on unmount.** A browser allows only a handful of connections per host; a forgotten stream is one the player's `<audio>` cannot have. (`web/library.tsx`)
-- **The saved position rides on `timeupdate`; only the highlight rides on `requestAnimationFrame`.** A hidden tab suspends rAF entirely while `<audio>` keeps playing — measured, not assumed: 0 frames in 5 seconds with playback advancing normally. So the frame loop stops refreshing `seconds`, and someone who switches tabs, listens on and then closes the page is rewound to wherever they switched away. `timeupdate` keeps firing in a hidden tab, and its four-times-a-second is coarse only for word highlighting, never for a resume point. Reading `audioRef` at save time is not the fix: React detaches the ref before the unmount cleanup runs, which is what the `seconds` ref exists for. (`web/player.tsx`)
-- **Playback is sampled with `requestAnimationFrame`, not `timeupdate`.** `timeupdate` fires about four times a second — visibly late for word-level highlight. The cost is contained by only setting state when `locate` returns a different Line or Word. (`web/player.tsx`)
-- **Tokens are swept by Word, never merged with them.** `tokenWords` matches both back onto `line.text` by character offset, so a Word covering three Tokens lights all three at once. Merging the two arrays instead — the obvious shortcut — silently mis-times every Line whose boundaries disagree, which for Japanese is most of them. (`shared/locate.ts`)
-- **Every colour is one `light-dark()` token, and no rule below the palette names a colour.** A hardcoded hex renders one screen wrong in one theme, for the half of users on the other one, which is the bug nobody reports. Both values sitting on one line is what makes that structurally hard: a token cannot be restyled for light and forgotten for dark. `color-scheme` picks the half that applies and hands the same choice to what CSS does not draw, including the `<audio>` controls. Cost: this needs Chrome 123 / Safari 17.5 / Firefox 120, and on anything older every colour is invalid at once — a loud failure, not a subtle one.
-- **The manual theme override is the `data-theme` attribute, and "auto" is its absence.** `:root[data-theme="light"|"dark"]` sets `color-scheme` outright; removing the attribute puts `prefers-color-scheme` back in charge with no rule of its own. `index.html` applies the stored choice in a blocking script before first paint — React's effect runs after it, and a dark flash on every load is exactly what someone who chose light is trying to avoid. (`app.tsx`, `styles.css`)
-- **A faded Word is faded differently per theme.** On a dark ground a `pending` Word is still a light shape against black; on a light ground the same opacity walks it into the background. `--pending` is the one token that is not a colour, so `light-dark()` cannot hold it and it states both themes the long way.
+- **`Word` and `Token` are different things.** Word = audio timing from the ASR. Token = morphology from kuromoji. Japanese has no spaces, so their boundaries genuinely disagree; never merge the two arrays. Reconciling them for display is `tokenWords`' job, at render time (ADR 0005).
+- **Tokens are swept by Word, never merged with them.** `tokenWords` matches both back onto `line.text` by character offset, so a Word covering three Tokens lights all three at once. (`shared/locate.ts`)
+- **The studied language is optional; the native language never is.** Unset means the transcription call omits `language` and the translation prompt names no source language — both providers detect it — so one shelf can hold Japanese, Spanish and English episodes. Japanese Tokens are then decided by the transcript's own text (kana), which is why the Annotator takes the tokenizer as a thunk: only the Transcript knows whether that dictionary is worth loading. (`annotate.ts`)
+- **kuromoji is behind a dynamic load and a thunk, and both halves matter.** A value import puts it in the main bundle for every reader; a static thunk downloads the dictionary for someone studying Spanish. The type it needs comes through an `import type`, which is erased before a bundler sees it. (`japanese.ts`, `pipeline.ts`)
+- **The interface language _is_ the Native Language.** One setting, not two. It is cached in `localStorage` because Settings live in IndexedDB, which cannot be read before a first paint, and a shell that flashed English on every load is what someone who set their language is trying to avoid. The ask-AI prompt comes from the same table, asked in the native language, which is what makes the answer come back in it without a sentence instructing the model to. (`web/i18n.ts`, `player.tsx`)
+- **`completeStream` never retries.** `complete` and `completeJson` retry a rate limit or a server error; streaming does not, because a retry after part of an answer has reached the ask-AI popup would show a second answer under the first. (`text-model.ts`)
+- **The playback rate rides on `timeupdate`; only the highlight rides on `requestAnimationFrame`.** A hidden tab suspends rAF entirely while `<audio>` keeps playing — measured, not assumed: 0 frames in 5 seconds with playback advancing normally. Reading `audioRef` at save time is not the fix either: React detaches the ref before the unmount cleanup runs, which is what the `seconds` ref exists for. (`player.tsx`)
+- **Playback is sampled with `requestAnimationFrame`, not `timeupdate`.** `timeupdate` fires about four times a second — visibly late for word-level highlight. The cost is contained by only setting state when `locate` returns a different Line or Word. (`player.tsx`)
+- **Every colour is one `light-dark()` token, and no rule below the palette names a colour.** A hardcoded hex renders one screen wrong in one theme, for the half of users on the other one, which is the bug nobody reports. Cost: Chrome 123 / Safari 17.5 / Firefox 120, and on anything older every colour is invalid at once — a loud failure, not a subtle one.
+- **The manual theme override is the `data-theme` attribute, and "auto" is its absence.** `index.html` applies the stored choice in a blocking script before first paint; React's effect runs after it, and a dark flash on every load is exactly what someone who chose light is trying to avoid. (`app.tsx`, `styles.css`)
+- **A faded Word is faded differently per theme.** `--pending` is the one token that is not a colour, so `light-dark()` cannot hold it and it states both themes the long way.
+- **The proxy's key is its only gate, and it is a real secret because the page does not carry it.** An origin allowlist beside it would refuse nobody the key does not already refuse — `curl` omits `Origin` — while locking out a reader hosting the page themselves. (`worker/index.ts`, ADR 0009)
 - **No TypeScript syntax that emits code.** Node runs these files by stripping types, so parameter properties, enums and namespaces break at runtime. `erasableSyntaxOnly` in tsconfig rejects them at typecheck.
 
 ## Testing conventions
 
-- `node --test` with `node:assert`. No test framework, and don't add one — Node 24 strips types and runs `*.test.ts` directly.
-- Test through a module's interface, not past it. Fakes are plain object literals implementing a port.
-- **Use the real thing where a stub would lie.** `japanese.test.ts` loads the actual kuromoji dictionary; `audio/ffmpeg.test.ts` synthesises audio with ffmpeg and checks real silence detection, and extracts a chunk from a real mp3 source — a fake `AudioTool` would happily "extract" from any input, and would never have caught the mp3-into-`.m4a` container mismatch above. A wrong filter string or a misplaced `-ss` passes against a fake and ships broken.
-- `storage/contract.test.ts` runs one suite against **both** Storage adapters. The S3 half only runs when `DUOLISTENING_TEST_S3_BUCKET` is set.
-- **One unexplained failure, 2026-09-07.** A full run came back 166/167 while a dev server, Docker and a browser were all busy on the same machine; 40 later runs could not reproduce it and the failing test was never identified. If it returns, start with the two `setTimeout(…, 10)` waits in `import-jobs.test.ts` — they assume the queue advances within 10ms, which is the only load-sensitive assumption in the suite.
-- A `ponytail:` comment marks a deliberate shortcut and names its ceiling. There are two: the Library's in-process write mutex, and the in-memory job queue. Both break under multi-instance deployment, which the single-tenant design (ADR 0001) rules out for now.
+- `node --test` with `node:assert`. No test framework, and don't add one.
+- Test through a module's interface, not past it. Fakes are plain object literals or an injected `fetch`.
+- **Use the real thing where a stub would lie.** `japanese.test.ts` loads the actual kuromoji dictionary. `speech-to-text.test.ts`'s fake endpoint reports the duration a byte range really represents and cuts segments on its own boundaries, because a fake returning segments aligned to the chunk edge would pass against arithmetic that is wrong.
+- **There are no DOM tests**, deliberately — the logic worth testing is pure and lives below the components. IndexedDB and the browser half of kuromoji are driven in a real browser instead, with a throwaway page. That is not optional diligence: this refactor's last three bugs — a language table indexed by position, a placeholder still naming YouTube, and a dictionary hanging on a header — were all invisible to `tsc` and to 336 passing tests.
+- A `ponytail:` comment marks a deliberate shortcut and names its ceiling. There are none left; the two that existed were a write mutex and a job queue, and both went with the server.
 
 ## Not yet done
 
-- **No `LICENSE`.** Needs choosing before this is published anywhere; the README says so too.
+- **No `LICENSE`.** Needs choosing before this is published anywhere.
 - **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
-- **The ask-AI popup is one shot.** Clicking `?` pauses playback, sends one fixed prompt about one Line, and streams the reply in as Markdown (`TextModel.completeStream`, `POST /api/ask` via `streamText`); there is no input box, and the server keeps no history, so re-opening it asks the identical question and gets the identical answer. A hard sentence usually takes two or three rounds. Deferred deliberately (2026-09-07) rather than forgotten: it is not a front-end change. `completeStream(prompt: string)` in `ports.ts` still takes a single string, so follow-up means giving that seam a message list and changing `POST /api/ask` to match.
-- **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so `POST /api/library/:id/retry` answers 409 and redoing one is delete-and-import.
-- **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate, and accepted: production is unaffected. Add `@vitejs/plugin-react` if it starts to grate.
-- **No DOM tests.** The web half's real logic lives in `shared/locate.ts` — pure, and covered there. The rest is rendering, and testing it would mean adding a DOM and a test framework this project deliberately doesn't have; it is checked by driving the built app in a browser instead.
+- **Nothing has been deployed, and no episode has been imported end to end** on the new architecture. Every piece is verified on its own and the two halves have never been run together against a real feed.
+- **A Library is per-browser-per-origin.** A phone and a laptop are two Libraries with no path between them, and the export is the only bridge. For a listening app the phone is a plausible primary device, so this is the sharpest open question (ADR 0008).
+- **The ask-AI popup is one shot.** One fixed prompt about one Line, no input box, no history — so re-opening it asks the identical question. `completeStream(prompt: string)` takes a single string; follow-up means giving it a message list.
+- **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so redoing one is delete-and-import.
+- **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate; production is unaffected.

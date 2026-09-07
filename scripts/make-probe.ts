@@ -51,4 +51,6 @@ await cp(
 );
 
 const files = await readdir(dictTo);
-console.log(`wrote probe.wav, kuromoji.js and ${files.length} dictionary files into src/web/public`);
+console.log(
+  `wrote probe.wav, kuromoji.js and ${files.length} dictionary files into src/web/public`,
+);

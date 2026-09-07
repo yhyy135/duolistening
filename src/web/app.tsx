@@ -125,4 +125,3 @@ function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
     </>
   );
 }
-

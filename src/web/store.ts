@@ -38,7 +38,8 @@ function db(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       for (const name of STORES) {
-        if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name);
+        if (!request.result.objectStoreNames.contains(name))
+          request.result.createObjectStore(name);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -234,7 +235,10 @@ export async function allEntries(): Promise<BackupEntry[]> {
   const entries: BackupEntry[] = [];
   for (const resource of resources) {
     const transcript = await value<Transcript | undefined>(
-      database.transaction("transcripts", "readonly").objectStore("transcripts").get(resource.id),
+      database
+        .transaction("transcripts", "readonly")
+        .objectStore("transcripts")
+        .get(resource.id),
     );
     if (transcript) entries.push({ resource, transcript });
   }

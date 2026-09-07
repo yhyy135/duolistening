@@ -1,120 +1,124 @@
 # duolistening
 
-Self-hosted listening practice. Paste a YouTube link or a podcast feed, and it
-transcribes the episode with your own LLM keys and gives you back a lyrics-style
-transcript: the current line scrolls into view and lights up word by word as it
-plays, your own language sits underneath, and Japanese gets furigana and
-part-of-speech colouring.
+Listening practice. Paste a podcast feed, pick an episode, and it transcribes that
+episode with your own LLM keys and gives you back a lyrics-style transcript: the
+current line scrolls into view and lights up word by word as it plays, your own
+language sits underneath, and Japanese gets furigana and part-of-speech colouring.
 
-It is one person's tool. There are no accounts — one deployment serves you, with a
-single shared password in front of it.
+**Everything stays in your browser.** Your API keys, your shelf, your transcripts and
+the audio itself live in your browser's storage and never reach a machine anyone else
+runs. There are no accounts and no password, because there is nothing on a server to
+put one in front of — which is also what lets several people share one deployment,
+each paying for their own transcription with their own keys.
 
 ## What you need
 
-- **Node 22.18 or newer.** The server runs its TypeScript sources directly, which
-  needs a Node that strips types without a flag. Verified on 22.23 and 24.20.
-- **ffmpeg** and **ffprobe** — measuring, cutting and normalising audio.
-- **yt-dlp** — fetching audio from YouTube. Not needed for podcasts.
 - **An OpenAI-compatible chat endpoint and an OpenAI-compatible transcription
   endpoint.** They can be the same provider or two different ones. See below.
+- **A byte proxy** — a small Cloudflare Worker, included in `worker/`. It exists
+  because a browser genuinely cannot do three things for itself: follow the redirect
+  a podcast host answers with, reach a host that sends no CORS headers, and hand a
+  transcription endpoint a slice of a large file. It stores nothing.
+- **Node 22.18 or newer**, but only to build. There is nothing to run afterwards.
 
-Docker gives you the first three for free.
+No ffmpeg, no yt-dlp, no Docker, no database.
 
 ## Running it
 
-### Docker
-
-```bash
-echo "DUOLISTENING_PASSWORD=pick-something" > .env
-docker compose up --build
-```
-
-Then open http://localhost:3000. Compose reads that `.env` for every subcommand, so
-`logs`, `ps` and `down` all work afterwards without repeating yourself. Your library
-and audio live in a named volume and survive `docker compose down`.
-
-### From source
-
 ```bash
 npm ci
-npm run build                                  # the browser half, into dist/web
-DUOLISTENING_PASSWORD=pick-something npm start # http://localhost:3000
+npm run dev:web   # http://localhost:5173
 ```
 
-`npm start` serves `dist/web` when it is there and warns that it is API-only when it
-is not, so build before you start.
+That is the whole of local development. Note that the transcription provider cannot
+reach `localhost`, so importing a real episode needs a deployed page — see below.
+
+## Deploying
+
+Two halves that know nothing about each other.
+
+**The page** is static. `npm run build` writes `dist/web`; put it on any static host.
+It carries no configuration at all — not even the proxy's address, which is a setting
+each reader fills in.
+
+One requirement: whatever serves it **must not send `Content-Encoding: gzip` for
+`/kuromoji/dict/*`**. Those files are gzipped content that the Japanese tokenizer
+unpacks itself, not a transfer encoding, and a server that decodes them first leaves
+the tokenizer hanging with no error to read.
+
+**The proxy** is `worker/`:
+
+```bash
+cd worker
+wrangler secret put PROXY_KEY   # not [vars] — that file is committed
+wrangler deploy
+```
+
+`PROXY_KEY` is a shared secret you hand to the people you want using it. It is a real
+secret rather than a public constant precisely because it lives in each reader's
+settings instead of in the page everyone downloads. Cloudflare's own rate limiting is
+the backstop against someone who obtains it; there is no code here that can be.
 
 ## Pointing it at models
 
-Nothing works until you open **Settings** and fill in the two slots. They are
-separate because the jobs are different: transcription has to return per-segment
-timestamps, which most chat models cannot do.
+Nothing works until you open **Settings**. Three things to fill in.
+
+The two model slots are separate because the jobs are different: transcription has to
+return per-segment timestamps, which most chat models cannot do.
 
 | Slot                    | Endpoint used                     | What it does                      |
 | ----------------------- | --------------------------------- | --------------------------------- |
 | **Text Model**          | `{base URL}/chat/completions`     | Translation, and the ask-AI popup |
 | **Transcription Model** | `{base URL}/audio/transcriptions` | Speech to text                    |
 
-Each slot takes a base URL, an API key and a model name. Some combinations:
+Each takes a base URL, an API key and a model name. Some combinations:
 
-- **One provider for both** — base URL `https://api.openai.com/v1`, with a chat model
-  such as `gpt-4o-mini` and `whisper-1`.
-- **Split across two** — this is the combination the pipeline was last verified
-  end to end against: OpenRouter (`https://openrouter.ai/api/v1`) for text, and Groq
-  (`https://api.groq.com/openai/v1`, `whisper-large-v3-turbo`) for transcription.
-- **Something local** — anything serving the same two paths, such as a local
-  llama.cpp or vLLM server, works. Point the base URL at it and leave the key blank
-  if it does not want one.
+- **Groq for transcription** — `https://api.groq.com/openai/v1` with
+  `whisper-large-v3-turbo`. This is the one verified against a real episode.
+- **One provider for both** — `https://api.openai.com/v1`, with a chat model such as
+  `gpt-4o-mini` and `whisper-1`.
+- **Something local** — anything serving the same two paths works, though a local
+  server the transcription provider cannot reach will not be able to fetch audio.
 
-Word-by-word highlighting needs word-level timestamps. duolistening asks for them
-and quietly falls back to highlighting the whole line when a provider will not give
-them, so a provider that lacks them still works, just less precisely.
+The transcription provider must support the `url` parameter, because that is how
+every import hands over audio: the endpoint fetches slices from the proxy rather than
+having them uploaded to it, which is most of why an import is fast. **Test
+connection** checks this specifically, and says so when a provider can transcribe an
+uploaded clip but cannot fetch one.
 
-Set your Native Language here too — it is what everything is translated into, and
+The third slot is the **byte proxy** — the address you deployed above, and its key.
+
+Word-by-word highlighting needs word-level timestamps. duolistening asks for them and
+quietly falls back to highlighting the whole line when a provider will not give them.
+
+Set your **Native Language** here too — it is what everything is translated into, and
 the interface follows it. The language you are studying is optional: leave it on
 auto-detect and each import works out what it is hearing, which is what makes a shelf
 of Japanese, Spanish and English episodes work without changing this first. Both are
 recorded on each import, so changing them later never mislabels transcripts you
 already have.
 
-## Configuration
-
-Everything except the model slots is an environment variable.
-
-| Variable                 | Default  | Meaning                                                |
-| ------------------------ | -------- | ------------------------------------------------------ |
-| `DUOLISTENING_PASSWORD`  | _unset_  | The shared password. Unset disables the gate entirely. |
-| `DUOLISTENING_DATA_DIR`  | `./data` | Where everything is kept, when using local storage.    |
-| `DUOLISTENING_S3_BUCKET` | _unset_  | Set it to keep everything in S3 instead of on disk.    |
-| `DUOLISTENING_S3_PREFIX` | _unset_  | Key prefix within that bucket.                         |
-| `PORT`                   | `3000`   |                                                        |
-
-**Set a password.** It is the only thing between a stranger who finds the URL and
-your API budget. Unset is reasonable on a laptop and reckless anywhere else — the
-server says so at startup.
-
-### Storage
-
-By default everything — settings, transcripts and audio — goes under
-`DUOLISTENING_DATA_DIR`. Set `DUOLISTENING_S3_BUCKET` and it goes to S3 instead,
-with audio streamed to the browser from presigned URLs so it never passes through
-the server. Credentials come from the standard AWS variables, and `AWS_ENDPOINT_URL`
-points it at MinIO, R2 or B2 without any code change.
-
-There is no database.
-
 ## Importing
 
-Paste into the one box on the library screen:
+Paste a podcast RSS feed into the one box on the library screen and pick an episode.
+It takes minutes, and the shelf shows the phase as it goes.
 
-- a **YouTube** link — imported straight away;
-- anything else is treated as a **podcast RSS feed**, and you pick an episode.
+Keep the tab open. The import runs in the page, so closing it abandons the import —
+the entry stays on the shelf and **Resume** picks up from whatever survived. The same
+button appears after a failure, with the reason beside it, and it never starts over:
+a failed translation does not mean paying to transcribe the episode again.
 
-Importing runs in the background and takes minutes; the shelf shows the phase as it
-goes. If it fails — a rate-limited key, a video that will not download — the entry
-stays on the shelf with the reason, and **Retry** picks up from whatever survived
-rather than starting over, so a failed translation does not mean paying to download
-and transcribe the whole thing again.
+## Export your library
+
+**Do this.** Browsers evict storage under disk pressure, and `navigator.storage.persist()`
+was refused by every browser tested — so an export is the only copy of a transcript
+that survives a browser deciding it needs the room. **Export** on the library screen
+writes one JSON file.
+
+It holds your transcripts, your shelf and your playback positions. It does not hold
+audio, which is around forty-five times larger and can be fetched again, and it does
+not hold your API keys. Importing one only ever adds: an episode already on the shelf
+is left exactly as it is.
 
 ## Development
 
@@ -122,13 +126,22 @@ and transcribe the whole thing again.
 npm test          # node:test, no framework
 npm run typecheck
 npm run format
-npm run dev:server  # :3000
-npm run dev:web     # :5173, proxying /api and /media to :3000 — use this one
+npm run build     # → dist/web
+npm run dev:web   # :5173
 ```
 
 [CLAUDE.md](CLAUDE.md) is the map of the codebase, [CONTEXT.md](CONTEXT.md) defines
 the vocabulary it uses, and [docs/adr/](docs/adr/) records why the architecture is
 shaped the way it is.
+
+## Known limits
+
+- A library belongs to one browser. A phone and a laptop are two libraries, and the
+  export is the only bridge between them.
+- The ask-AI popup asks one fixed question about one line and keeps no history, so
+  re-opening it gives the same answer.
+- Nothing has yet been run end to end on this architecture: every part is tested, but
+  the deployed page and the deployed proxy have not imported a real episode together.
 
 ## Licence
 

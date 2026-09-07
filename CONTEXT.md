@@ -1,15 +1,15 @@
 # Duolistening
 
-A self-hosted listening-practice tool: import a YouTube video or podcast episode, transcribe it with a user-configured LLM, and study it through a lyrics-style, time-synced bilingual transcript.
+A self-hosted listening-practice tool: import a podcast episode, transcribe it with a user-configured LLM, and study it through a lyrics-style, time-synced bilingual transcript. Everything a reader has — keys, shelf, Transcripts, audio — lives in their own browser (ADR 0008).
 
 ## Language
 
 **Resource**:
-A YouTube video or podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it.
+A podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it.
 _Avoid_: Track, episode, video, media, source
 
 **Library**:
-Everything the user has imported, kept until they delete it by hand. Deleting an entry takes its Transcript and audio with it. The landing screen: pick an entry and drop straight back into where you left off.
+Everything the user has imported, kept in their browser's IndexedDB until they delete it by hand. Deleting an entry takes its Transcript and audio with it. The landing screen: pick an entry and drop straight back into where you left off.
 _Avoid_: History (implies an event log that ages out — a Library entry only leaves when deleted), collection, shelf
 
 **Transcript**:

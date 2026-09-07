@@ -95,7 +95,11 @@ test("sliceUrls puts the total on every range, not only on the first", () => {
 
   const whole = new URL(url());
   assert.equal(whole.searchParams.has("start"), false);
-  assert.equal(whole.searchParams.has("total"), false, "no offsets in flight, nothing to guard");
+  assert.equal(
+    whole.searchParams.has("total"),
+    false,
+    "no offsets in flight, nothing to guard",
+  );
 });
 
 test("the total comes from a whole-file Content-Length, since Content-Range is stripped", async () => {
@@ -122,7 +126,11 @@ test("measuring the size does not download the episode", async () => {
 
 test("a length the proxy could not report is refused rather than guessed at", async () => {
   // Without it there is no chunk plan at all, and inventing one seams blind.
-  const headed: Record<string, string>[] = [{}, { "content-length": "0" }, { "content-length": "lots" }];
+  const headed: Record<string, string>[] = [
+    {},
+    { "content-length": "0" },
+    { "content-length": "lots" },
+  ];
   for (const headers of headed) {
     const fetch = spy(audio("MP3", headers));
     await assert.rejects(
@@ -191,7 +199,11 @@ test("the proxy's own answers become reasons the Settings screen can act on", as
   for (const [status, body, reason] of cases) {
     const result = await checkProxy(proxy, EPISODE, spy(new Response(body, { status })).impl);
     assert.equal(why(result), reason, `${status} ${body}`);
-    assert.match(result.ok ? "" : result.detail, new RegExp(String(status)), "say what it answered");
+    assert.match(
+      result.ok ? "" : result.detail,
+      new RegExp(String(status)),
+      "say what it answered",
+    );
   }
 });
 

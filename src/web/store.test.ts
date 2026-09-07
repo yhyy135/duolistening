@@ -12,7 +12,8 @@ import { audioType, typedAudio } from "./store.ts";
  * the local Library, which is where the bug this guards came from.
  */
 
-const head = (...bytes: number[]) => new Uint8Array([...bytes, ...Array(12 - bytes.length).fill(0)]);
+const head = (...bytes: number[]) =>
+  new Uint8Array([...bytes, ...Array(12 - bytes.length).fill(0)]);
 const ascii = (text: string, pad = 0) =>
   head(...Array(pad).fill(0), ...[...text].map((c) => c.charCodeAt(0)));
 
@@ -42,12 +43,26 @@ test("the other containers a podcast turns up in", () => {
   assert.equal(audioType(null, ascii("ftyp", 4)), "audio/mp4");
   assert.equal(audioType(null, ascii("OggS")), "audio/ogg");
   assert.equal(audioType(null, ascii("fLaC")), "audio/flac");
-  const wav = head(...[..."RIFF"].map((c) => c.charCodeAt(0)), 0, 0, 0, 0, ...[..."WAVE"].map((c) => c.charCodeAt(0)));
+  const wav = head(
+    ...[..."RIFF"].map((c) => c.charCodeAt(0)),
+    0,
+    0,
+    0,
+    0,
+    ...[..."WAVE"].map((c) => c.charCodeAt(0)),
+  );
   assert.equal(audioType(null, wav), "audio/wav");
 });
 
 test("RIFF alone is not a WAV", () => {
-  const webp = head(...[..."RIFF"].map((c) => c.charCodeAt(0)), 0, 0, 0, 0, ...[..."WEBP"].map((c) => c.charCodeAt(0)));
+  const webp = head(
+    ...[..."RIFF"].map((c) => c.charCodeAt(0)),
+    0,
+    0,
+    0,
+    0,
+    ...[..."WEBP"].map((c) => c.charCodeAt(0)),
+  );
   assert.equal(audioType("image/webp", webp), "image/webp");
 });
 
@@ -59,7 +74,13 @@ test("an unrecognised format falls back to what the server said", () => {
 
 test("a server that said nothing useful leaves the type empty, never a guess", () => {
   const unknown = head(0x01, 0x02, 0x03, 0x04);
-  for (const declared of [null, undefined, "", "application/octet-stream", "binary/octet-stream"]) {
+  for (const declared of [
+    null,
+    undefined,
+    "",
+    "application/octet-stream",
+    "binary/octet-stream",
+  ]) {
     assert.equal(audioType(declared, unknown), "", `${declared} should not become a type`);
   }
 });

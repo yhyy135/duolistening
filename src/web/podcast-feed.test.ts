@@ -142,10 +142,13 @@ describe("fetching a feed", () => {
     const fetch: typeof globalThis.fetch = () => Promise.reject(new Error("dns"));
     const podcast = createPodcastFeed({ proxyUrl, fetch });
 
-    await assert.rejects(podcast.listEpisodes("https://example.com/feed.xml"), (error: Error) => {
-      assert.match(error.message, /https:\/\/example\.com\/feed\.xml/);
-      assert.doesNotMatch(error.message, /shared-secret/, "the key is a shared secret");
-      return true;
-    });
+    await assert.rejects(
+      podcast.listEpisodes("https://example.com/feed.xml"),
+      (error: Error) => {
+        assert.match(error.message, /https:\/\/example\.com\/feed\.xml/);
+        assert.doesNotMatch(error.message, /shared-secret/, "the key is a shared secret");
+        return true;
+      },
+    );
   });
 });

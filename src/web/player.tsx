@@ -101,11 +101,11 @@ export function PlayerScreen({ id }: { id: string }) {
       // a backup, which carries Transcripts and not audio — playable, with the caveat
       // that a host splicing advertising may hand back a recording whose timings no
       // longer line up with the Lines made from it.
-      const audioUrl =
-        audio ? ((revoke = URL.createObjectURL(audio)), revoke)
-        : resource.source.kind === "podcast" ?
-          proxyUrl(settings?.proxy, resource.source.episodeUrl)
-        : "";
+      const audioUrl = audio
+        ? ((revoke = URL.createObjectURL(audio)), revoke)
+        : resource.source.kind === "podcast"
+          ? proxyUrl(settings?.proxy, resource.source.episodeUrl)
+          : "";
 
       setData({ resource, transcript: transcript ?? [], audioUrl });
     })().catch((failure: unknown) => {

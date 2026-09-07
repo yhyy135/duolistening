@@ -63,7 +63,9 @@ export function buildBackup(input: BuildInput): { backup: Backup; excluded: Reso
       format: BACKUP_FORMAT,
       version: BACKUP_VERSION,
       exportedAt: input.exportedAt ?? new Date().toISOString(),
-      ...(input.settings && { settings: forExport(input.settings, input.includeKeys ?? false) }),
+      ...(input.settings && {
+        settings: forExport(input.settings, input.includeKeys ?? false),
+      }),
       entries: ready,
     },
     excluded,
@@ -90,8 +92,7 @@ function forExport(settings: Settings, includeKeys: boolean): Settings {
 }
 
 export type ParseResult =
-  | { ok: true; backup: Backup; skipped: string[] }
-  | { ok: false; problem: string };
+  { ok: true; backup: Backup; skipped: string[] } | { ok: false; problem: string };
 
 /**
  * Reads a file the reader chose. Everything in it is untrusted — it may be the wrong

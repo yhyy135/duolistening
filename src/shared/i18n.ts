@@ -18,7 +18,6 @@ const en = {
   "theme.dark": "Dark",
   "nav.settings": "Settings",
 
-
   "common.loading": "Loading…",
   "common.back": "← Back",
   "common.save": "Save",
@@ -67,8 +66,6 @@ const en = {
   "settings.proxyKey": "Proxy key",
   "settings.proxyHint": "The Worker that fetches audio for you. Imports need it.",
 
-
-
   "settings.native": "Native Language",
   "settings.studying": "Studying (optional)",
   "settings.autoDetect": "Auto-detect",
@@ -102,7 +99,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "浅色",
     "theme.dark": "深色",
     "nav.settings": "设置",
-
 
     "common.loading": "加载中…",
     "common.back": "← 返回",
@@ -152,8 +148,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "代理密钥",
     "settings.proxyHint": "替你抓取音频的 Worker，导入时必须用到。",
 
-
-
     "settings.native": "母语",
     "settings.studying": "学习语言（选填）",
     "settings.autoDetect": "自动识别",
@@ -181,7 +175,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "淺色",
     "theme.dark": "深色",
     "nav.settings": "設定",
-
 
     "common.loading": "載入中…",
     "common.back": "← 返回",
@@ -231,8 +224,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "代理金鑰",
     "settings.proxyHint": "替你抓取音訊的 Worker，匯入時必須用到。",
 
-
-
     "settings.native": "母語",
     "settings.studying": "學習語言（選填）",
     "settings.autoDetect": "自動辨識",
@@ -260,7 +251,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "ライト",
     "theme.dark": "ダーク",
     "nav.settings": "設定",
-
 
     "common.loading": "読み込み中…",
     "common.back": "← 戻る",
@@ -310,8 +300,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "プロキシキー",
     "settings.proxyHint": "音声を取得する Worker。インポートに必要です。",
 
-
-
     "settings.native": "母語",
     "settings.studying": "学習中の言語（任意）",
     "settings.autoDetect": "自動判定",
@@ -339,7 +327,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "밝게",
     "theme.dark": "어둡게",
     "nav.settings": "설정",
-
 
     "common.loading": "불러오는 중…",
     "common.back": "← 뒤로",
@@ -389,8 +376,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "프록시 키",
     "settings.proxyHint": "오디오를 가져오는 Worker입니다. 가져오기에 필요합니다.",
 
-
-
     "settings.native": "모국어",
     "settings.studying": "학습 언어 (선택)",
     "settings.autoDetect": "자동 감지",
@@ -418,7 +403,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "Claro",
     "theme.dark": "Oscuro",
     "nav.settings": "Ajustes",
-
 
     "common.loading": "Cargando…",
     "common.back": "← Volver",
@@ -468,8 +452,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "Clave del proxy",
     "settings.proxyHint": "El Worker que descarga el audio. Las importaciones lo necesitan.",
 
-
-
     "settings.native": "Idioma nativo",
     "settings.studying": "Estudiando (opcional)",
     "settings.autoDetect": "Detección automática",
@@ -497,7 +479,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "Clair",
     "theme.dark": "Sombre",
     "nav.settings": "Réglages",
-
 
     "common.loading": "Chargement…",
     "common.back": "← Retour",
@@ -547,8 +528,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxyKey": "Clé du proxy",
     "settings.proxyHint": "Le Worker qui récupère l'audio. Les imports en ont besoin.",
 
-
-
     "settings.native": "Langue maternelle",
     "settings.studying": "Langue étudiée (facultatif)",
     "settings.autoDetect": "Détection automatique",
@@ -576,7 +555,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "theme.light": "Hell",
     "theme.dark": "Dunkel",
     "nav.settings": "Einstellungen",
-
 
     "common.loading": "Lädt…",
     "common.back": "← Zurück",
@@ -625,8 +603,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.proxy": "Byte-Proxy",
     "settings.proxyKey": "Proxy-Schlüssel",
     "settings.proxyHint": "Der Worker, der das Audio abruft. Importe brauchen ihn.",
-
-
 
     "settings.native": "Muttersprache",
     "settings.studying": "Lernsprache (optional)",
