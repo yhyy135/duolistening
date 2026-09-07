@@ -110,6 +110,7 @@ export function writeSettings(settings: Settings): Promise<void> {
 // ---------------------------------------------------------------- the shelf
 
 export async function listResources(): Promise<Resource[]> {
+  await claimPendingPosition();
   const store = (await db()).transaction("resources", "readonly").objectStore("resources");
   const all = await value(store.getAll() as IDBRequest<Resource[]>);
   // Newest first, which is the order the shelf renders in.
@@ -117,6 +118,9 @@ export async function listResources(): Promise<Resource[]> {
 }
 
 export async function getResource(id: ResourceId): Promise<Resource | undefined> {
+  // Also here, not only in listResources: opening a deep link to the player never
+  // touches the shelf, and that is exactly the path someone resuming takes.
+  await claimPendingPosition();
   const store = (await db()).transaction("resources", "readonly").objectStore("resources");
   return value(store.get(id));
 }
@@ -161,6 +165,51 @@ export async function savePosition(id: ResourceId, seconds: number): Promise<voi
   const resource = await value<Resource | undefined>(store.get(id));
   if (!resource) return;
   await value(store.put({ ...resource, lastPositionSec: seconds }, id));
+}
+
+/**
+ * The last position, parked somewhere a closing page can still write to.
+ *
+ * `savePosition` is asynchronous, and a transaction opened as the page tears down is
+ * not reliably committed — which is the same hole `navigator.sendBeacon` used to
+ * plug, back when a position was a POST. There is no beacon for IndexedDB. But
+ * `localStorage` is synchronous, and this is the one situation where that is the
+ * feature rather than the cost: the write lands before the page is gone.
+ *
+ * One key, not one per Resource: only the episode being listened to can be the one
+ * whose page is closing.
+ */
+const PENDING_POSITION = "duolistening.pendingPosition";
+
+export function flushPosition(id: ResourceId, seconds: number): void {
+  try {
+    localStorage.setItem(PENDING_POSITION, JSON.stringify({ id, seconds }));
+  } catch {
+    // Private modes can refuse to store. Losing a resume point is not worth throwing
+    // from inside a pagehide handler over.
+  }
+}
+
+/**
+ * Folds a parked position back into the Library. Called from the reads below rather
+ * than left to a caller to remember, because forgetting it loses exactly the thing
+ * it exists to save, and silently.
+ */
+async function claimPendingPosition(): Promise<void> {
+  let parked: { id?: unknown; seconds?: unknown } | null = null;
+  try {
+    parked = JSON.parse(localStorage.getItem(PENDING_POSITION) ?? "null");
+  } catch {
+    parked = null;
+  }
+  if (!parked || typeof parked.id !== "string" || typeof parked.seconds !== "number") return;
+  // Cleared first: a claim that throws must not be retried forever on every read.
+  try {
+    localStorage.removeItem(PENDING_POSITION);
+  } catch {
+    // See above.
+  }
+  await savePosition(parked.id, parked.seconds);
 }
 
 /** Cascades over all three stores in one transaction. */

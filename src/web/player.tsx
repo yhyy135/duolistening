@@ -5,10 +5,34 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { JobState, Line, Token } from "../shared/model.ts";
+import type { Line, Resource, Token, Transcript } from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
-import { type PlayableResource, api, reason } from "./api.ts";
+import { proxyUrl } from "./proxy.ts";
+import {
+  flushPosition,
+  getAudio,
+  getResource,
+  getTranscript,
+  readSettings,
+  savePosition,
+} from "./store.ts";
 import { useT } from "./i18n.ts";
+import { createTextModel } from "./text-model.ts";
+
+/** What the screen plays: the shelf entry, its Lines, and something `<audio>` accepts. */
+interface PlayableResource {
+  resource: Resource;
+  transcript: Transcript;
+  /**
+   * A blob URL over the stored audio, or the proxy standing in for it when there is
+   * none — which is what a Resource restored from a backup looks like, since a backup
+   * carries Transcripts and not audio.
+   */
+  audioUrl: string;
+}
+
+const reason = (failure: unknown) =>
+  failure instanceof Error ? failure.message : String(failure);
 
 /** The stops worth one click. Slow first: this is a listening tool, not a podcast app. */
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -28,7 +52,6 @@ function storedRate(): number {
 
 export function PlayerScreen({ id }: { id: string }) {
   const [data, setData] = useState<PlayableResource | null>(null);
-  const [translating, setTranslating] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
@@ -56,37 +79,66 @@ export function PlayerScreen({ id }: { id: string }) {
 
   useEffect(() => {
     setData(null);
-    setTranslating(null);
     setPosition(NOWHERE);
     setFollowing(true);
     loopLine.current = null;
-    api.resource(id).then(setData, (failure: unknown) => setError(reason(failure)));
-  }, [id]);
 
-  // Opened while translation is still filling in: follow the same import job the
-  // shelf watches, and on every tick re-fetch the Transcript so newly-translated
-  // Lines appear without a reload. `playbackUrl` is deliberately left out of the
-  // merge — on S3 it is a presigned URL that differs on every fetch, and replacing
-  // it would reset the <audio> element mid-playback.
+    // The blob URL is revoked when this effect is torn down, so switching episodes
+    // does not leave the previous one's bytes pinned in memory for the tab's life.
+    let revoke: string | undefined;
+    let dropped = false;
+    (async () => {
+      const [resource, transcript, audio, settings] = await Promise.all([
+        getResource(id),
+        getTranscript(id),
+        getAudio(id),
+        readSettings(),
+      ]);
+      if (dropped) return;
+      if (!resource) throw new Error(t("player.missing"));
+
+      // Stored audio wins. Falling back to the proxy is for a Resource restored from
+      // a backup, which carries Transcripts and not audio — playable, with the caveat
+      // that a host splicing advertising may hand back a recording whose timings no
+      // longer line up with the Lines made from it.
+      const audioUrl =
+        audio ? ((revoke = URL.createObjectURL(audio)), revoke)
+        : resource.source.kind === "podcast" ?
+          proxyUrl(settings?.proxy, resource.source.episodeUrl)
+        : "";
+
+      setData({ resource, transcript: transcript ?? [], audioUrl });
+    })().catch((failure: unknown) => {
+      if (!dropped) setError(reason(failure));
+    });
+
+    return () => {
+      dropped = true;
+      if (revoke) URL.revokeObjectURL(revoke);
+    };
+  }, [id, t]);
+
+  // Opened while translation is still filling in: re-read the Transcript as it
+  // lands, so newly-translated Lines appear without a reload.
   useEffect(() => {
     const phase = data?.resource.phase;
     if (!phase || phase === "ready" || phase === "failed") return;
-    return api.watchImport(id, (state) => {
-      setTranslating(state);
-      api
-        .resource(id)
-        .then((fresh) =>
-          setData(
-            (current) =>
-              current && { ...current, resource: fresh.resource, transcript: fresh.transcript },
-          ),
-        );
-    });
+    // Polling, where this used to subscribe to the import's own event stream. The
+    // import now runs in whichever screen started it and publishes nothing, so the
+    // store is the only thing both sides share — and a couple of seconds is well
+    // inside what a translation batch takes to land. `audioUrl` is deliberately left
+    // out of the merge: replacing it would reset the <audio> element mid-playback.
+    const timer = setInterval(async () => {
+      const [resource, transcript] = await Promise.all([getResource(id), getTranscript(id)]);
+      if (!resource) return;
+      setData((current) => current && { ...current, resource, transcript: transcript ?? [] });
+    }, 2000);
+    return () => clearInterval(timer);
   }, [id, data?.resource.phase]);
 
   useEffect(
     () => () => {
-      if (seconds.current > 0) void api.savePosition(id, seconds.current);
+      if (seconds.current > 0) void savePosition(id, seconds.current);
     },
     [id],
   );
@@ -94,9 +146,15 @@ export function PlayerScreen({ id }: { id: string }) {
   // Neither the unmount cleanup above nor the pause/seeked saves below run when the
   // tab is closed, the browser quits, or iOS Safari backgrounds the app — pagehide
   // and a visibilitychange to hidden are what's left to catch those.
+  //
+  // These park the position in localStorage rather than writing it. An IndexedDB
+  // transaction opened as the page tears down is not reliably committed, and there
+  // is no beacon for IndexedDB the way there was for a POST; localStorage is
+  // synchronous, so the write is done before the page can go. The store folds it
+  // back in on the next read.
   useEffect(() => {
     const onHide = () => {
-      if (seconds.current > 0) api.savePositionBeacon(id, seconds.current);
+      if (seconds.current > 0) flushPosition(id, seconds.current);
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") onHide();
@@ -161,7 +219,7 @@ export function PlayerScreen({ id }: { id: string }) {
       cancelAnimationFrame(frame);
       frame = 0;
       sample();
-      if (seconds.current > 0) void api.savePosition(id, seconds.current);
+      if (seconds.current > 0) void savePosition(id, seconds.current);
     };
 
     // The saved position rides on timeupdate, not on the frame loop above:
@@ -265,7 +323,7 @@ export function PlayerScreen({ id }: { id: string }) {
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="notice">{t("common.loading")}</p>;
 
-  const { resource, transcript, playbackUrl } = data;
+  const { resource, transcript, audioUrl } = data;
   const seek = (line: Line) => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -279,13 +337,14 @@ export function PlayerScreen({ id }: { id: string }) {
       <h1>{resource.title}</h1>
       {resource.phase === "annotating" && (
         <p className="notice">
+          {/* No percentage: progress lives in whichever screen is driving the
+              import, and this one is only watching the store. */}
           {t("player.translating")}
-          {translating?.progress !== undefined && ` ${Math.round(translating.progress * 100)}%`}
         </p>
       )}
       <audio
         ref={audioRef}
-        src={playbackUrl}
+        src={audioUrl}
         controls
         preload="metadata"
         onLoadedMetadata={(event) => {
@@ -539,10 +598,31 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
     if (!text) return;
     setAnswer(null);
     dialogRef.current?.showModal();
-    api
-      .askStream(text, (chunk) => setAnswer((prev) => (prev ?? "") + chunk))
-      .catch((failure: unknown) => setAnswer(reason(failure)));
-  }, [text]);
+    let dropped = false;
+
+    (async () => {
+      const settings = await readSettings();
+      if (!settings) throw new Error(t("library.needsSettings"));
+      // The question is asked in the reader's own language, and that is what makes
+      // the answer come back in it — no sentence instructing the model to.
+      const prompt = t("ask.prompt", { text });
+      for await (const chunk of createTextModel({ slot: settings.textModel }).completeStream(
+        prompt,
+      )) {
+        if (dropped) return;
+        setAnswer((prev) => (prev ?? "") + chunk);
+      }
+    })().catch((failure: unknown) => {
+      // Whatever went wrong lands in the answer, where the reader is already looking.
+      // completeStream never retries, so a failure half way through cannot end up
+      // showing a second answer underneath the first.
+      if (!dropped) setAnswer((prev) => (prev ?? "") + reason(failure));
+    });
+
+    return () => {
+      dropped = true;
+    };
+  }, [text, t]);
 
   return (
     <dialog ref={dialogRef} className="ask-dialog" onClose={onClose}>

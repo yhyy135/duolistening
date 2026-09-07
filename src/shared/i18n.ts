@@ -52,6 +52,7 @@ const en = {
   "library.autoLanguage": "auto",
 
   "player.translating": "Translating…",
+  "player.missing": "That episode is no longer in this Library.",
   "player.noTranscript": "No transcript yet.",
   "player.jumpToCurrent": "Jump to current line",
   "player.repeat": "↻ Repeat",
@@ -139,6 +140,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "自动",
 
     "player.translating": "翻译中…",
+    "player.missing": "这一集已不在本地库里。",
     "player.noTranscript": "暂无字幕。",
     "player.jumpToCurrent": "跳到当前行",
     "player.repeat": "↻ 循环",
@@ -220,6 +222,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "自動",
 
     "player.translating": "翻譯中…",
+    "player.missing": "這一集已不在本機庫裡。",
     "player.noTranscript": "尚無字幕。",
     "player.jumpToCurrent": "跳到目前這行",
     "player.repeat": "↻ 循環",
@@ -301,6 +304,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "自動",
 
     "player.translating": "翻訳中…",
+    "player.missing": "そのエピソードはこのライブラリにありません。",
     "player.noTranscript": "字幕はまだありません。",
     "player.jumpToCurrent": "再生中の行へ",
     "player.repeat": "↻ リピート",
@@ -382,6 +386,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "자동",
 
     "player.translating": "번역 중…",
+    "player.missing": "해당 에피소드가 이 라이브러리에 없습니다.",
     "player.noTranscript": "아직 전사본이 없습니다.",
     "player.jumpToCurrent": "현재 줄로 이동",
     "player.repeat": "↻ 반복",
@@ -463,6 +468,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "auto",
 
     "player.translating": "Traduciendo…",
+    "player.missing": "Ese episodio ya no está en esta biblioteca.",
     "player.noTranscript": "Aún no hay transcripción.",
     "player.jumpToCurrent": "Ir a la línea actual",
     "player.repeat": "↻ Repetir",
@@ -544,6 +550,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "auto",
 
     "player.translating": "Traduction…",
+    "player.missing": "Cet épisode n'est plus dans cette bibliothèque.",
     "player.noTranscript": "Pas encore de transcription.",
     "player.jumpToCurrent": "Aller à la ligne en cours",
     "player.repeat": "↻ Répéter",
@@ -625,6 +632,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.autoLanguage": "auto",
 
     "player.translating": "Übersetzt…",
+    "player.missing": "Diese Folge ist nicht mehr in dieser Bibliothek.",
     "player.noTranscript": "Noch kein Transkript.",
     "player.jumpToCurrent": "Zur aktuellen Zeile",
     "player.repeat": "↻ Wiederholen",
