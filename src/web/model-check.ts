@@ -1,4 +1,5 @@
 import type { LanguageCode, ModelSlot, SettingsCheck, SlotCheck } from "../shared/model.ts";
+import { createSpeechToText } from "./speech-to-text.ts";
 import { ModelError, type ModelErrorReason, createTextModel } from "./text-model.ts";
 
 // Trying the two model slots for real, so a typo in a base URL or a model name
@@ -21,6 +22,12 @@ export interface CheckOptions {
   textModel: ModelSlot;
   transcriptionModel: ModelSlot;
   targetLanguage?: LanguageCode;
+  /**
+   * Absolute URL of the generated probe clip — `new URL("/probe.wav", location.origin)`.
+   * The provider fetches it, so a relative path is no use. Omitting it skips the
+   * second probe below and leaves the `url` gap open.
+   */
+  probeUrl?: string;
   fetch?: typeof globalThis.fetch;
 }
 
@@ -34,11 +41,53 @@ export async function checkSettings(options: CheckOptions): Promise<SettingsChec
     probe(options.textModel, () =>
       createTextModel({ slot: options.textModel, fetch: doFetch }).complete(PROMPT),
     ),
-    probe(options.transcriptionModel, () =>
-      transcribeClip(options.transcriptionModel, options.targetLanguage, doFetch),
-    ),
+    probeTranscription(options, doFetch),
   ]);
   return { textModel, transcriptionModel };
+}
+
+/**
+ * Two probes, because the pipeline needs two things and one call cannot prove both.
+ *
+ * The upload proves the slot can transcribe at all — auth, routing, the model name.
+ * The second hands over a URL, which is how an import actually works (ADR 0010), and
+ * is the only way to find out whether this provider knows the `url` parameter: one
+ * major provider does not, and without this it would pass Settings and then fail
+ * every single import.
+ *
+ * A url probe that fails after an upload that succeeded is deliberately not reported
+ * as a broken slot, because it has two causes and they cannot be told apart from
+ * here: the provider may not support `url`, or this app may simply not be reachable
+ * from the internet — which is the normal case on localhost, where a provider cannot
+ * fetch anything. Guessing between them by reading the provider's error wording is
+ * the coupling this file has already refused once. So it says both.
+ */
+async function probeTranscription(
+  options: CheckOptions,
+  doFetch: typeof globalThis.fetch,
+): Promise<SlotCheck> {
+  const uploaded = await probe(options.transcriptionModel, () =>
+    transcribeClip(options.transcriptionModel, options.targetLanguage, doFetch),
+  );
+  if (!uploaded.ok || !options.probeUrl) return uploaded;
+
+  try {
+    await transcribeProbeUrl(
+      options.transcriptionModel,
+      options.probeUrl,
+      options.targetLanguage,
+      doFetch,
+    );
+    return { ok: true, detail: "" };
+  } catch {
+    return {
+      ok: true,
+      detail:
+        "Transcribed an uploaded clip, but could not transcribe one by URL — which is how" +
+        " imports fetch audio. Either this provider does not support the `url` parameter," +
+        " or this app is not reachable from the internet, which is normal on localhost.",
+    };
+  }
 }
 
 /**
@@ -47,13 +96,9 @@ export async function checkSettings(options: CheckOptions): Promise<SettingsChec
  * `/models` or resolving the host, passes for a model that does not exist and for a
  * provider that cannot transcribe at all.
  *
- * It uploads the clip where an import hands over a URL, and that is a real gap rather
- * than an oversight: a provider could accept this and still not know the `url`
- * parameter ADR 0010 relies on. Closing it properly needs a fetchable clip, so it
- * needs somewhere to host one; detecting it from the shape of an error message would
- * couple this screen to one provider's wording. So the gap is named here instead —
- * everything else about the slot is proven, and `url` support fails loudly on the
- * first import with the provider's own message.
+ * Uploading is not how an import moves audio; `transcribeProbeUrl` covers that half.
+ * This one exists because it works from anywhere, including a laptop no provider can
+ * reach, so a misconfigured key or model name is still caught during development.
  *
  * The clip is generated rather than committed: a fixture would be a binary blob in
  * the repo that nobody could review.
@@ -83,6 +128,21 @@ async function transcribeClip(
     const detail = await response.text().catch(() => "");
     throw new ModelError(reasonFor(response.status), detail.slice(0, 300));
   }
+}
+
+/**
+ * The other half: the provider fetches a clip for itself, exactly as it will fetch
+ * every slice of every episode. It runs through the pipeline's own client rather than
+ * a copy of it, so a change to how imports call the endpoint cannot drift away from
+ * what this screen claims to have verified.
+ */
+function transcribeProbeUrl(
+  slot: ModelSlot,
+  probeUrl: string,
+  language: LanguageCode | undefined,
+  doFetch: typeof globalThis.fetch,
+): Promise<unknown> {
+  return createSpeechToText({ slot, fetch: doFetch }).transcribeUrl(probeUrl, language);
 }
 
 async function probe(slot: ModelSlot, work: () => Promise<unknown>): Promise<SlotCheck> {

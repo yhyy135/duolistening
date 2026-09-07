@@ -7,3 +7,4 @@ data
 .claude/settings.local.json
 skills-lock.json
 .claude/launch.json
+src/web/public/

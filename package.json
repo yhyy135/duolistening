@@ -12,7 +12,10 @@
     "start": "node src/server/main.ts",
     "dev:server": "node --watch src/server/main.ts",
     "build": "vite build",
-    "dev:web": "vite"
+    "dev:web": "vite",
+    "probe": "node scripts/make-probe.ts",
+    "prebuild": "npm run probe",
+    "predev:web": "npm run probe"
   },
   "devDependencies": {
     "@types/kuromoji": "^0.1.3",

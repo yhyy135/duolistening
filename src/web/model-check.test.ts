@@ -63,6 +63,77 @@ test("the transcription probe sends real audio under the configured model name",
   assert.ok(clip.size > 1000, "an empty probe would prove nothing");
 });
 
+/** Distinguishes the two transcription probes by which field they carry. */
+function transcriptionRouter(byUrl: () => Response) {
+  const modes: string[] = [];
+  const impl: typeof globalThis.fetch = async (input, init) => {
+    if (!String(input).endsWith("/audio/transcriptions")) return chatOk();
+    const form = init?.body as FormData;
+    const mode = form.has("url") ? "url" : "file";
+    modes.push(mode);
+    if (mode === "file") return new Response(JSON.stringify({ duration: 1, segments: [] }));
+    return byUrl();
+  };
+  return { impl, modes };
+}
+
+test("with a probe URL, the provider is also made to fetch one for itself", async () => {
+  const fetch = transcriptionRouter(
+    () => new Response(JSON.stringify({ duration: 1, segments: [{ start: 0, end: 1, text: "ok" }] })),
+  );
+  const result = await checkSettings({
+    textModel: good,
+    transcriptionModel: good,
+    probeUrl: "https://app.example/probe.wav",
+    fetch: fetch.impl,
+  });
+
+  // Both halves: uploading proves it can transcribe, the URL proves imports will work.
+  assert.deepEqual(fetch.modes, ["file", "url"]);
+  assert.equal(result.transcriptionModel.ok, true);
+  assert.equal(result.transcriptionModel.detail, "");
+});
+
+test("a provider that cannot fetch a URL is flagged, and both causes are named", async () => {
+  // What a provider with no `url` support answers, and what one answers when it
+  // cannot reach a localhost origin. From here they look identical.
+  const fetch = transcriptionRouter(() => new Response("unknown parameter: url", { status: 400 }));
+  const result = await checkSettings({
+    textModel: good,
+    transcriptionModel: good,
+    probeUrl: "http://localhost:5173/probe.wav",
+    fetch: fetch.impl,
+  });
+
+  // Not a broken slot — it transcribed fine. But imports would fail, so say so.
+  assert.equal(result.transcriptionModel.ok, true);
+  assert.match(result.transcriptionModel.detail, /does not support the `url` parameter/);
+  assert.match(result.transcriptionModel.detail, /not reachable from the internet/);
+});
+
+test("no probe URL means the upload probe alone, as before", async () => {
+  const fetch = transcriptionRouter(() => new Response("never asked", { status: 500 }));
+  const result = await checkSettings({ textModel: good, transcriptionModel: good, fetch: fetch.impl });
+
+  assert.deepEqual(fetch.modes, ["file"]);
+  assert.equal(result.transcriptionModel.ok, true);
+});
+
+test("a slot that cannot transcribe at all is not then asked to fetch a URL", async () => {
+  const fetch = router({ audio: () => new Response("bad key", { status: 401 }) });
+  const result = await checkSettings({
+    textModel: good,
+    transcriptionModel: good,
+    probeUrl: "https://app.example/probe.wav",
+    fetch: fetch.impl,
+  });
+
+  assert.equal(result.transcriptionModel.ok, false);
+  assert.match(result.transcriptionModel.detail, /API key was rejected/);
+  // One call, not two: the second could only produce a second way of saying the same.
+  assert.equal(fetch.urls.filter((u) => u.endsWith("/audio/transcriptions")).length, 1);
+});
+
 test("an unconfigured slot says so without calling anything", async () => {
   for (const slot of [{ ...good, baseUrl: "" }, { ...good, model: "  " }]) {
     const fetch = router();
