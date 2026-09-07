@@ -150,6 +150,11 @@ export interface Annotator {
       nativeLanguage: LanguageCode;
       targetLanguage: LanguageCode;
       onProgress?: ProgressFn;
+      /** Fired after each batch with the full Transcript so far, so a caller can let
+       *  playback start before every batch has translated — the Resource is already
+       *  playable once transcription is done, and this is what lets translations fill
+       *  in progressively instead of waiting for the whole thing. */
+      onBatch?: (partial: Transcript) => void | Promise<void>;
     },
   ): Promise<Transcript>;
 }

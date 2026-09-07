@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Line, Token } from "../shared/model.ts";
+import type { JobState, Line, Token } from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
 import { type PlayableResource, api, reason } from "./api.ts";
 
@@ -27,6 +27,7 @@ function storedRate(): number {
 
 export function PlayerScreen({ id }: { id: string }) {
   const [data, setData] = useState<PlayableResource | null>(null);
+  const [translating, setTranslating] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
@@ -53,11 +54,33 @@ export function PlayerScreen({ id }: { id: string }) {
 
   useEffect(() => {
     setData(null);
+    setTranslating(null);
     setPosition(NOWHERE);
     setFollowing(true);
     loopLine.current = null;
     api.resource(id).then(setData, (failure: unknown) => setError(reason(failure)));
   }, [id]);
+
+  // Opened while translation is still filling in: follow the same import job the
+  // shelf watches, and on every tick re-fetch the Transcript so newly-translated
+  // Lines appear without a reload. `playbackUrl` is deliberately left out of the
+  // merge — on S3 it is a presigned URL that differs on every fetch, and replacing
+  // it would reset the <audio> element mid-playback.
+  useEffect(() => {
+    const phase = data?.resource.phase;
+    if (!phase || phase === "ready" || phase === "failed") return;
+    return api.watchImport(id, (state) => {
+      setTranslating(state);
+      api
+        .resource(id)
+        .then((fresh) =>
+          setData(
+            (current) =>
+              current && { ...current, resource: fresh.resource, transcript: fresh.transcript },
+          ),
+        );
+    });
+  }, [id, data?.resource.phase]);
 
   useEffect(
     () => () => {
@@ -252,6 +275,12 @@ export function PlayerScreen({ id }: { id: string }) {
   return (
     <main className="player">
       <h1>{resource.title}</h1>
+      {resource.phase === "annotating" && (
+        <p className="notice">
+          Translating…
+          {translating?.progress !== undefined && ` ${Math.round(translating.progress * 100)}%`}
+        </p>
+      )}
       <audio
         ref={audioRef}
         src={playbackUrl}

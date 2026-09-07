@@ -155,4 +155,28 @@ describe("annotator", () => {
     assert.equal(seen.length, 3);
     assert.equal(seen.at(-1), 1);
   });
+
+  it("hands onBatch a growing, fully-shaped Transcript as each batch lands", async () => {
+    const snapshots: Transcript[] = [];
+    // concurrency: 1 keeps batches landing in a fixed order, so the snapshots'
+    // lengths and content can be asserted without racing.
+    const annotator = createAnnotator({
+      textModel: stubTextModel(translateEverything),
+      batchSize: 10,
+      concurrency: 1,
+    });
+
+    const result = await annotator.annotate(lines(25), {
+      ...japanese,
+      onBatch: (partial) => snapshots.push(partial),
+    });
+
+    assert.equal(snapshots.length, 3);
+    // Every snapshot already covers every Line — only how many are translated grows.
+    assert.equal(snapshots[0]?.length, 25);
+    assert.equal(snapshots[0]?.filter((line) => line.translation).length, 10);
+    assert.equal(snapshots[1]?.filter((line) => line.translation).length, 20);
+    assert.equal(snapshots[2]?.filter((line) => line.translation).length, 25);
+    assert.deepEqual(snapshots.at(-1), result);
+  });
 });

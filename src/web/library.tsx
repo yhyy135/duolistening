@@ -112,11 +112,13 @@ export function LibraryScreen() {
           const watched = jobs[resource.id];
           const stalled =
             phase !== "ready" && (phase === "failed" || (!watched && !!silent[resource.id]));
+          // Transcription is the slow, billed step; translation runs after and fills
+          // in as it goes (Annotator's onBatch), so a Resource is worth opening as
+          // soon as it has lines, not only once every line is translated too.
+          const playable = phase === "ready" || phase === "annotating";
           return (
-            <li key={resource.id} className={phase === "ready" ? "ready" : ""}>
-              <a
-                href={phase === "ready" ? `#/r/${encodeURIComponent(resource.id)}` : undefined}
-              >
+            <li key={resource.id} className={playable ? "ready" : ""}>
+              <a href={playable ? `#/r/${encodeURIComponent(resource.id)}` : undefined}>
                 <span className="title">{resource.title}</span>
                 <span className="meta">
                   {formatTime(resource.durationSec)}

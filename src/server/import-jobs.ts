@@ -141,6 +141,10 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
           nativeLanguage: settings.nativeLanguage,
           targetLanguage: settings.targetLanguage,
           onProgress: (fraction) => publish(id, { progress: fraction }),
+          // The Resource is already playable once transcription is done (below), so
+          // each batch is saved as it lands instead of only the final, fully-annotated
+          // Transcript — that's what lets translations fill in while someone listens.
+          onBatch: (partial) => library.save(current, { transcript: partial }),
         });
 
         current = { ...current, phase: "ready" };

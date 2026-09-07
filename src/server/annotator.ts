@@ -5,8 +5,10 @@ export interface AnnotatorOptions {
   textModel: TextModel;
   /** Required to get Tokens when the target language is Japanese; ignored otherwise. */
   tokenizer?: JapaneseTokenizer;
-  /** Lines per translation call. Default 25. */
+  /** Lines per translation call. Default 40. */
   batchSize?: number;
+  /** Batches in flight at once. Default 4 — enough to matter, low enough to stay under most providers' rate limits. */
+  concurrency?: number;
 }
 
 /** What the Text Model is asked to return per line. Short keys keep the reply small. */
@@ -25,17 +27,38 @@ interface TranslatedLine {
  */
 export function createAnnotator(options: AnnotatorOptions): Annotator {
   const { textModel, tokenizer } = options;
-  const batchSize = options.batchSize ?? 25;
+  const batchSize = options.batchSize ?? 40;
+  const concurrency = options.concurrency ?? 4;
 
   return {
     async annotate(lines: Transcript, opts): Promise<Transcript> {
       if (lines.length === 0) return [];
 
       const wantsTokens = opts.targetLanguage === JAPANESE && tokenizer !== undefined;
-      const translations = new Map<number, string>();
-      const batches = chunk(lines, batchSize);
+      // Tokenizing doesn't depend on translation, so it happens once up front rather
+      // than on every partial snapshot below — the New-Lines rule still holds, since
+      // this itself never touches the input Lines.
+      const withTokens: Transcript = lines.map((line) => ({
+        ...line,
+        ...(wantsTokens && { tokens: tokenizer.tokenize(line.text) }),
+      }));
 
-      for (const [batchIndex, batch] of batches.entries()) {
+      const translations = new Map<number, string>();
+      const merge = (): Transcript =>
+        withTokens.map((line, index) => {
+          const translation = translations.get(index);
+          // A model that skipped an entry leaves that Line untranslated rather than
+          // wearing its neighbour's translation.
+          return translation === undefined ? line : { ...line, translation };
+        });
+
+      const batches = chunk(lines, batchSize);
+      let completed = 0;
+
+      // Batches translate independently, so they go out concurrently (capped, to stay
+      // under a provider's rate limit) instead of one-at-a-time — sequential awaiting
+      // made total time scale with batch count, which for a full episode is the slow path.
+      async function runBatch(batch: (typeof batches)[number]): Promise<void> {
         const reply = await textModel.completeJson<TranslatedLine[]>(
           translationPrompt(batch, opts.targetLanguage, opts.nativeLanguage),
         );
@@ -44,21 +67,27 @@ export function createAnnotator(options: AnnotatorOptions): Annotator {
             translations.set(entry.i, entry.t);
           }
         }
-        opts.onProgress?.((batchIndex + 1) / batches.length);
+        completed++;
+        // Written before the progress tick that will make a watcher look for it, so a
+        // caller who refetches on that tick already sees this batch's translations.
+        await opts.onBatch?.(merge());
+        opts.onProgress?.(completed / batches.length);
       }
+
+      const queue = [...batches];
+      const workers = Array.from(
+        { length: Math.min(concurrency, batches.length) },
+        async () => {
+          for (let next = queue.shift(); next; next = queue.shift()) {
+            await runBatch(next);
+          }
+        },
+      );
+      await Promise.all(workers);
 
       // New Lines throughout: callers hold onto the input, and silently mutating it
       // would make a retry of this step operate on already-annotated data.
-      return lines.map((line, index): Line => {
-        const translation = translations.get(index);
-        return {
-          ...line,
-          // A model that skipped an entry leaves that Line untranslated rather than
-          // wearing its neighbour's translation.
-          ...(translation !== undefined && { translation }),
-          ...(wantsTokens && { tokens: tokenizer.tokenize(line.text) }),
-        };
-      });
+      return merge();
     },
   };
 }
