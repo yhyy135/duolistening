@@ -1,0 +1,8 @@
+name = "duolistening-proxy"
+main = "index.ts"
+compatibility_date = "2026-09-08"
+
+# No KV, no R2, no Durable Objects, no cache: this thing holds nothing. It pipes
+# `upstream.body` straight into the Response, so the bytes never enter the isolate
+# and a 26MB slice costs the same CPU as a 200-byte one — which is what keeps it
+# inside the free plan's 10ms CPU budget.
