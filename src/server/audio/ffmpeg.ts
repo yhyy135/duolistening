@@ -66,11 +66,13 @@ export function createFfmpegAudioTool(options: FfmpegOptions = {}): AudioTool {
         "-t",
         (endSec - startSec).toFixed(3),
         "-vn",
-        // Stream copy: no re-encode, so a chunk costs milliseconds instead of minutes.
-        // Cuts land on frame boundaries, which for audio is tens of milliseconds — far
-        // finer than the line-level sync this feeds.
-        "-c",
-        "copy",
+        // Re-encode to AAC rather than stream-copying: the destination is always
+        // named `.m4a` (the ASR endpoint needs a real extension), and `-c copy` into
+        // an MP4 container fails outright for any source codec that container can't
+        // hold — mp3 chief among them, which is most podcasts. Audio-only encodes
+        // are fast enough that this never shows up next to network/ASR latency.
+        "-c:a",
+        "aac",
         destPath,
       ]);
     },

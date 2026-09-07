@@ -102,4 +102,20 @@ describe("ffmpeg audio tool", { skip: !(await hasFfmpeg()) && "ffmpeg not instal
       "cutting from the wrong offset would give audible tone here",
     );
   });
+
+  it("extracts from an mp3 source into a playable .m4a chunk", async () => {
+    // Most podcast enclosures are mp3. A stream copy into the .m4a/MP4 container
+    // this always writes rejects that codec outright — this only passes with a
+    // real re-encode.
+    const mp3Source = path.join(workDir, "source.mp3");
+    await run("ffmpeg", ["-y", "-i", source, mp3Source]);
+
+    const chunk = path.join(workDir, "from-mp3.m4a");
+    await audio.extract(mp3Source, 1, 4, chunk);
+
+    assert.ok(
+      Math.abs((await audio.durationSec(chunk)) - 3) < 0.25,
+      "the mp3-sourced chunk should extract to the requested length",
+    );
+  });
 });
