@@ -3,6 +3,8 @@
 // is pure and already tested — this file only turns its answer into DOM.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Line, Token } from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
 import { type PlayableResource, api, reason } from "./api.ts";
@@ -284,7 +286,12 @@ export function PlayerScreen({ id }: { id: string }) {
                 looping={loop && index === position.lineIndex}
                 wordIndex={index === position.lineIndex ? position.wordIndex : null}
                 onSeek={() => seek(line)}
-                onAsk={() => setAsking(line.text)}
+                onAsk={() => {
+                  // Reading a line's grammar and listening to the next one at once
+                  // is not the point of this dialog.
+                  audioRef.current?.pause();
+                  setAsking(line.text);
+                }}
               />
             ))}
           </ol>
@@ -498,16 +505,17 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
     if (!text) return;
     setAnswer(null);
     dialogRef.current?.showModal();
-    api.ask(text).then(
-      (reply) => setAnswer(reply.answer),
-      (failure: unknown) => setAnswer(reason(failure)),
-    );
+    api
+      .askStream(text, (chunk) => setAnswer((prev) => (prev ?? "") + chunk))
+      .catch((failure: unknown) => setAnswer(reason(failure)));
   }, [text]);
 
   return (
     <dialog ref={dialogRef} className="ask-dialog" onClose={onClose}>
       <p className="text">{text}</p>
-      <p className="answer">{answer ?? "Asking…"}</p>
+      <div className="answer">
+        {answer ? <Markdown remarkPlugins={[remarkGfm]}>{answer}</Markdown> : "Asking…"}
+      </div>
       <button onClick={() => dialogRef.current?.close()}>Close</button>
     </dialog>
   );

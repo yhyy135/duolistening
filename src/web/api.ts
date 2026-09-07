@@ -125,5 +125,34 @@ export const api = {
     return () => stream.close();
   },
 
-  ask: (text: string) => send<{ answer: string }>("/api/ask", "POST", { text }),
+  /**
+   * Streams the ask-AI answer as plain Markdown text, chunk by chunk, so the popup
+   * can render it as it arrives instead of waiting for the whole reply.
+   */
+  async askStream(text: string, onChunk: (chunk: string) => void): Promise<void> {
+    const response = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (response.status === 401) {
+      onUnauthorized();
+      throw new ApiError("unauthorized", 401);
+    }
+    if (!response.ok || !response.body) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new ApiError(
+        body.error ?? `${response.status} ${response.statusText}`,
+        response.status,
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      onChunk(decoder.decode(value, { stream: true }));
+    }
+  },
 };

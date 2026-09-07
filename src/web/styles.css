@@ -579,13 +579,46 @@ button.ask {
   font-size: 1.1rem;
 }
 .ask-dialog .answer {
-  white-space: pre-wrap;
   color: var(--dim);
   margin: 0 0 1rem;
+}
+.ask-dialog .answer :first-child {
+  margin-top: 0;
+}
+.ask-dialog .answer :last-child {
+  margin-bottom: 0;
+}
+.ask-dialog .answer pre {
+  overflow-x: auto;
+}
+.ask-dialog .answer code {
+  background: var(--hover);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.ask-dialog .answer table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.ask-dialog .answer th,
+.ask-dialog .answer td {
+  border: 1px solid var(--line);
+  padding: 0.3em 0.6em;
+  text-align: left;
 }
 
 /* ---- settings ---- */
 
+.settings .back {
+  background: none;
+  color: var(--dim);
+  padding: 0.4em 0;
+  margin-bottom: 0.6rem;
+}
+.settings .back:hover:not(:disabled) {
+  background: none;
+  color: var(--ink);
+}
 .settings form {
   display: grid;
   gap: 1rem;
@@ -603,6 +636,11 @@ button.ask {
   color: var(--dim);
   font-size: 0.85em;
   padding: 0 0.4em;
+}
+.settings .hint {
+  margin: -0.2rem 0 0;
+  font-size: 0.85em;
+  color: var(--dim);
 }
 .settings label {
   display: grid;

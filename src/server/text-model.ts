@@ -96,9 +96,64 @@ export function createTextModel(options: TextModelOptions): TextModel {
     }
   }
 
+  async function* streamOnce(messages: Message[]): AsyncIterable<string> {
+    let response: Response;
+    try {
+      response = await doFetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${slot.apiKey}`,
+        },
+        body: JSON.stringify({ model: slot.model, messages, stream: true }),
+      });
+    } catch (cause) {
+      throw new ModelError("network", `Could not reach ${endpoint}`, { cause });
+    }
+
+    if (!response.ok) {
+      throw new ModelError(
+        statusToReason(response.status),
+        `Model call failed with ${response.status}: ${(await safeText(response)).slice(0, 500)}`,
+      );
+    }
+    if (!response.body) return;
+
+    // SSE lines are not guaranteed to land on chunk boundaries, so a partial line at
+    // the end of one read is held back and glued to the front of the next.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) yield* deltaOf(line);
+    }
+  }
+
+  function* deltaOf(line: string): Generator<string> {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    try {
+      const parsed = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] };
+      const delta = parsed.choices?.[0]?.delta?.content;
+      if (delta) yield delta;
+    } catch {
+      // A provider that puts a comment or keep-alive on the wire is not an error.
+    }
+  }
+
   return {
     complete(prompt: string): Promise<string> {
       return call([{ role: "user", content: prompt }]);
+    },
+
+    completeStream(prompt: string): AsyncIterable<string> {
+      return streamOnce([{ role: "user", content: prompt }]);
     },
 
     async completeJson<T>(prompt: string): Promise<T> {

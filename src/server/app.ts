@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
-import { streamSSE } from "hono/streaming";
+import { streamSSE, streamText } from "hono/streaming";
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
@@ -192,8 +192,23 @@ export function createApp(options: AppOptions) {
     }
 
     const settings = await readSettings(storage);
-    const answer = await options.textModel(settings).complete(askPrompt(text, settings));
-    return context.json({ answer });
+    const prompt = askPrompt(text, settings);
+    // The reply streams as plain Markdown text, not SSE: there is one consumer and
+    // one string being built, so a framing format would only add ceremony.
+    return streamText(
+      context,
+      async (stream) => {
+        for await (const chunk of options.textModel(settings).completeStream(prompt)) {
+          await stream.write(chunk);
+        }
+      },
+      // The status and headers are already committed by the time a model call can
+      // fail, so the failure reaches the popup as text instead of a status code —
+      // exactly what it would have shown had `complete` rejected before streaming.
+      async (error, stream) => {
+        await stream.write(error.message);
+      },
+    );
   });
 
   app.get("/media/*", async (context) => {

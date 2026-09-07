@@ -80,12 +80,15 @@ describe("http app", () => {
     };
 
     const textModel = (_settings: Settings): TextModel => ({
-      complete: async (prompt) => {
-        asked.push(prompt);
-        return "This sentence introduces yourself.";
+      complete: async () => {
+        throw new Error("unused");
       },
       completeJson: async () => {
         throw new Error("unused");
+      },
+      completeStream: async function* (prompt) {
+        asked.push(prompt);
+        yield "This sentence introduces yourself.";
       },
     });
 
@@ -476,8 +479,10 @@ describe("http app", () => {
         headers: auth,
         body: JSON.stringify({ text: "今日は自己紹介をします" }),
       });
+      const body = await response.text();
 
       assert.equal(response.status, 200);
+      assert.equal(body, "This sentence introduces yourself.");
       assert.match(asked[0] ?? "", /Japanese/);
       assert.match(asked[0] ?? "", /Simplified Chinese/);
       assert.match(asked[0] ?? "", /今日は自己紹介をします/);
@@ -493,9 +498,12 @@ describe("http app", () => {
         password: PASSWORD,
         textModel: () => ({
           complete: async () => {
-            throw new ModelError("auth", "bad key");
+            throw new Error("unused");
           },
           completeJson: async () => ({}) as never,
+          completeStream: (): AsyncIterable<string> => {
+            throw new ModelError("auth", "bad key");
+          },
         }),
       });
 
@@ -505,8 +513,10 @@ describe("http app", () => {
         body: JSON.stringify({ text: "hi" }),
       });
 
-      assert.equal(response.status, 502);
-      assert.equal(((await response.json()) as { reason: string }).reason, "auth");
+      // The status is already committed by the time a streamed call can fail, so the
+      // reason surfaces in the body text instead of a 502 the way a plain call would.
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), "bad key");
     });
   });
 

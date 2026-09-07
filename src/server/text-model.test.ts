@@ -29,6 +29,26 @@ const says = (content: string, status = 200) =>
 
 const fails = (status: number) => new Response("upstream said no", { status });
 
+/** One Response whose body arrives as these separate chunks — a real SSE reply can
+    split a line across chunk boundaries, which a body built from one string cannot
+    exercise. */
+function sseResponse(chunks: string[], status = 200): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(body, { status });
+}
+
+async function collect(stream: AsyncIterable<string>): Promise<string[]> {
+  const chunks: string[] = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return chunks;
+}
+
 const model = (fetch: typeof globalThis.fetch) =>
   createTextModel({ slot, fetch, baseDelayMs: 0 });
 
@@ -129,6 +149,45 @@ describe("text model", () => {
         return true;
       });
       assert.equal(fetch.calls.length, 2);
+    });
+  });
+
+  describe("completeStream", () => {
+    it("yields each delta, reassembling a line split across a chunk boundary", async () => {
+      const fetch = stubFetch(
+        sseResponse([
+          'data: {"choices":[{"delta":{"content":"こん"}}]}\n\ndata: {"choices":[{"delta":{"conte',
+          'nt":"にちは"}}]}\n\ndata: [DONE]\n\n',
+        ]),
+      );
+
+      assert.deepEqual(await collect(model(fetch).completeStream("hi")), ["こん", "にちは"]);
+      assert.deepEqual(fetch.calls[0]?.body, {
+        model: "some-model",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      });
+    });
+
+    it("skips a line it cannot parse instead of dying", async () => {
+      const fetch = stubFetch(
+        sseResponse(['data: not json\n\ndata: {"choices":[{"delta":{"content":"ok"}}]}\n\n']),
+      );
+      assert.deepEqual(await collect(model(fetch).completeStream("hi")), ["ok"]);
+    });
+
+    it("rejects on a bad status before yielding anything", async () => {
+      const fetch = stubFetch(fails(401));
+      await assert.rejects(collect(model(fetch).completeStream("hi")), (error: ModelError) => {
+        assert.equal(error.reason, "auth");
+        return true;
+      });
+    });
+
+    it("does not retry — a partial answer already on screen should not be redone", async () => {
+      const fetch = stubFetch(fails(503));
+      await assert.rejects(collect(model(fetch).completeStream("hi")));
+      assert.equal(fetch.calls.length, 1);
     });
   });
 });

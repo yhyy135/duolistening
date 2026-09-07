@@ -19,6 +19,9 @@ const workingText: TextModel = {
   completeJson: async () => {
     throw new Error("unused");
   },
+  completeStream: (): never => {
+    throw new Error("unused");
+  },
 };
 const workingSpeech: SpeechToText = { transcribeChunk: async () => [] };
 

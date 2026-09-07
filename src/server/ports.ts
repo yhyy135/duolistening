@@ -163,6 +163,13 @@ export interface TextModel {
   complete(prompt: string): Promise<string>;
   /** Retries once with a repair prompt when the model returns unparseable JSON. */
   completeJson<T>(prompt: string): Promise<T>;
+  /**
+   * Yields the answer as the model generates it, for the ask-AI popup. Unlike
+   * `complete`, a failure is not retried: retrying after some of the answer has
+   * already reached the caller would mean showing a second answer underneath the
+   * first, which is worse than just stopping.
+   */
+  completeStream(prompt: string): AsyncIterable<string>;
 }
 
 /**

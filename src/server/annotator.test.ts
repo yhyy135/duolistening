@@ -14,6 +14,9 @@ function stubTextModel(reply: (prompt: string) => unknown): TextModel & { prompt
       prompts.push(prompt);
       return reply(prompt) as T;
     },
+    completeStream: () => {
+      throw new Error("not used by the annotator");
+    },
   };
 }
 
