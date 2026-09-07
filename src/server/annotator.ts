@@ -3,8 +3,12 @@ import type { Annotator, JapaneseTokenizer, TextModel } from "./ports.ts";
 
 export interface AnnotatorOptions {
   textModel: TextModel;
-  /** Required to get Tokens when the target language is Japanese; ignored otherwise. */
-  tokenizer?: JapaneseTokenizer;
+  /**
+   * Built on demand, and only for Japanese Lines: the dictionary is tens of megabytes,
+   * and with the studied language now optional the caller cannot know up front whether
+   * this import needs it. Awaited at most once per annotate call.
+   */
+  tokenizer?: () => Promise<JapaneseTokenizer>;
   /** Lines per translation call. Default 40. */
   batchSize?: number;
   /** Batches in flight at once. Default 4 — enough to matter, low enough to stay under most providers' rate limits. */
@@ -34,13 +38,18 @@ export function createAnnotator(options: AnnotatorOptions): Annotator {
     async annotate(lines: Transcript, opts): Promise<Transcript> {
       if (lines.length === 0) return [];
 
-      const wantsTokens = opts.targetLanguage === JAPANESE && tokenizer !== undefined;
+      // The setting may say Japanese, or say nothing at all and leave the text to
+      // answer — kana is the giveaway, and no other language on the list has any.
+      const isJapanese =
+        opts.targetLanguage === JAPANESE ||
+        (opts.targetLanguage === undefined && lines.some((line) => KANA.test(line.text)));
+      const tokenize = isJapanese && tokenizer ? await tokenizer() : undefined;
       // Tokenizing doesn't depend on translation, so it happens once up front rather
       // than on every partial snapshot below — the New-Lines rule still holds, since
       // this itself never touches the input Lines.
       const withTokens: Transcript = lines.map((line) => ({
         ...line,
-        ...(wantsTokens && { tokens: tokenizer.tokenize(line.text) }),
+        ...(tokenize && { tokens: tokenize.tokenize(line.text) }),
       }));
 
       const translations = new Map<number, string>();
@@ -92,16 +101,24 @@ export function createAnnotator(options: AnnotatorOptions): Annotator {
   };
 }
 
+/** Hiragana and katakana. No other language in LANGUAGES uses either. */
+const KANA = /[\u3040-\u30ff]/;
+
 function translationPrompt(
   batch: { line: Line; index: number }[],
-  targetLanguage: string,
+  targetLanguage: string | undefined,
   nativeLanguage: string,
 ): string {
-  const from = LANGUAGE_NAMES[targetLanguage as keyof typeof LANGUAGE_NAMES] ?? targetLanguage;
+  // Naming the source language is a hint, not a requirement: when it is unset the
+  // model reads it off the lines, which is the same thing it does when the setting
+  // is there but wrong about this particular recording.
+  const from = targetLanguage
+    ? ` from ${LANGUAGE_NAMES[targetLanguage as keyof typeof LANGUAGE_NAMES] ?? targetLanguage}`
+    : "";
   const to = LANGUAGE_NAMES[nativeLanguage as keyof typeof LANGUAGE_NAMES] ?? nativeLanguage;
 
   return [
-    `Translate each numbered line from ${from} into ${to}.`,
+    `Translate each numbered line${from} into ${to}.`,
     "These lines are consecutive speech from one recording; use the surrounding lines for context,",
     "but translate each line on its own and never merge, split, or reorder them.",
     `Reply with only a JSON array: [{"i": <the line's number>, "t": "<the translation>"}],`,

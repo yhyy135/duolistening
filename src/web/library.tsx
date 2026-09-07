@@ -3,15 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { Episode, ImportPhase, JobState, Resource, SourceRef } from "../shared/model.ts";
 import { api, reason } from "./api.ts";
+import { useT } from "./i18n.ts";
 
-const PHASE_LABEL: Record<ImportPhase, string> = {
-  queued: "Queued",
-  fetching: "Downloading",
-  transcribing: "Transcribing",
-  annotating: "Translating",
-  ready: "Ready",
-  failed: "Failed",
-};
+/** The phase names double as i18n keys, so there is no second list to keep in step. */
+const phaseKey = (phase: ImportPhase) => `phase.${phase}` as const;
 
 /** mm:ss, or h:mm:ss past the hour — podcast episodes routinely run longer. */
 const formatTime = (seconds: number) =>
@@ -23,6 +18,7 @@ export function LibraryScreen() {
   const [silent, setSilent] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const t = useT();
   // Closed on unmount: a browser only allows a handful of connections per host, and
   // a forgotten stream is one the <audio> element on the player screen can't have.
   // Keyed by Resource, because that is also what keeps one stream per import.
@@ -95,8 +91,8 @@ export function LibraryScreen() {
     <main>
       <ImportBox onStarted={follow} />
       {error && <p className="error">{error}</p>}
-      {resources === null && <p className="notice">Loading…</p>}
-      {resources?.length === 0 && <p className="notice">Nothing imported yet.</p>}
+      {resources === null && <p className="notice">{t("common.loading")}</p>}
+      {resources?.length === 0 && <p className="notice">{t("library.empty")}</p>}
 
       <ul className="shelf">
         {resources?.map((resource) => {
@@ -123,14 +119,15 @@ export function LibraryScreen() {
                 <span className="meta">
                   {formatTime(resource.durationSec)}
                   {" · "}
-                  {resource.targetLanguage}→{resource.nativeLanguage}
+                  {resource.targetLanguage ?? t("library.autoLanguage")}→
+                  {resource.nativeLanguage}
                   {resource.lastPositionSec
-                    ? ` · resume ${formatTime(resource.lastPositionSec)}`
+                    ? ` · ${t("library.resume", { time: formatTime(resource.lastPositionSec) })}`
                     : ""}
                 </span>
                 {phase !== "ready" && (
                   <span className={`phase ${phase}`}>
-                    {PHASE_LABEL[phase]}
+                    {t(phaseKey(phase))}
                     {progress !== undefined && ` ${Math.round(progress * 100)}%`}
                     {reason && `: ${reason}`}
                   </span>
@@ -143,7 +140,7 @@ export function LibraryScreen() {
               </a>
               {stalled && (
                 <button onClick={() => void retry(resource)}>
-                  {phase === "failed" ? "Retry" : "Resume"}
+                  {phase === "failed" ? t("library.retry") : t("library.resumeImport")}
                 </button>
               )}
               {/* Two clicks on one button rather than confirm(): that dialog blocks
@@ -158,7 +155,7 @@ export function LibraryScreen() {
                     : setConfirming(resource.id)
                 }
               >
-                {confirming === resource.id ? "Sure?" : "Delete"}
+                {confirming === resource.id ? t("common.sure") : t("common.delete")}
               </button>
             </li>
           );
@@ -186,6 +183,7 @@ function ImportBox({ onStarted }: { onStarted: (state: JobState) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feed, setFeed] = useState<{ feedTitle: string; episodes: Episode[] } | null>(null);
+  const t = useT();
 
   async function attempt(work: () => Promise<void>) {
     setBusy(true);
@@ -219,10 +217,10 @@ function ImportBox({ onStarted }: { onStarted: (state: JobState) => void }) {
       >
         <input
           value={url}
-          placeholder="YouTube link, or a podcast RSS feed"
+          placeholder={t("library.placeholder")}
           onChange={(event) => setUrl(event.target.value)}
         />
-        <button disabled={busy}>{busy ? "Working…" : "Import"}</button>
+        <button disabled={busy}>{busy ? t("library.working") : t("library.import")}</button>
       </form>
       {error && <p className="error">{error}</p>}
 

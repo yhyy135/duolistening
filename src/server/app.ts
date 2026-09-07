@@ -2,9 +2,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { streamSSE, streamText } from "hono/streaming";
+import { t } from "../shared/i18n.ts";
 import {
   LANGUAGES,
-  LANGUAGE_NAMES,
   storageKeys,
   type LanguageCode,
   type ModelSlot,
@@ -263,17 +263,12 @@ export function createApp(options: AppOptions) {
 }
 
 /**
- * The fixed ask-AI template, generalised past the original Chinese-only wording so
- * it still works for someone whose native language is not Chinese.
+ * The fixed ask-AI template, asked in the user's native language — which is also
+ * what makes the model answer in it, without a sentence telling it to. Same string
+ * table the web half's labels come from, so the two never drift.
  */
 function askPrompt(text: string, settings: Settings): string {
-  const target = languageName(settings.targetLanguage);
-  const native = languageName(settings.nativeLanguage);
-  return `Help me understand this ${target} sentence — its grammar, vocabulary and nuance. Answer in ${native}.\n\n${text}`;
-}
-
-function languageName(code: LanguageCode): string {
-  return LANGUAGE_NAMES[code] ?? code;
+  return t(settings.nativeLanguage, "ask.prompt", { text });
 }
 
 /** Settings arrive from the browser, so every field is checked before it is stored. */
@@ -284,10 +279,20 @@ function parseSettings(value: unknown): Settings | null {
   const textModel = parseSlot(candidate["textModel"]);
   const transcriptionModel = parseSlot(candidate["transcriptionModel"]);
   const nativeLanguage = parseLanguage(candidate["nativeLanguage"]);
-  const targetLanguage = parseLanguage(candidate["targetLanguage"]);
-  if (!textModel || !transcriptionModel || !nativeLanguage || !targetLanguage) return null;
+  if (!textModel || !transcriptionModel || !nativeLanguage) return null;
 
-  return { textModel, transcriptionModel, nativeLanguage, targetLanguage };
+  // The studied language is optional — absent (or blank) means detect it per import.
+  // A value that is present but not one we know is still a mistake, not an "auto".
+  const wanted = candidate["targetLanguage"];
+  const targetLanguage = wanted ? parseLanguage(wanted) : undefined;
+  if (wanted && !targetLanguage) return null;
+
+  return {
+    textModel,
+    transcriptionModel,
+    nativeLanguage,
+    ...(targetLanguage && { targetLanguage }),
+  };
 }
 
 function parseSlot(value: unknown): ModelSlot | null {

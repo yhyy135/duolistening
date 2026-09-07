@@ -294,6 +294,40 @@ describe("http app", () => {
       assert.equal(stored?.nativeLanguage, "en");
     });
 
+    it("stores no studied language when the browser leaves it out, and rejects a bogus one", async () => {
+      await storage.writeDoc("settings.json", {
+        textModel: { baseUrl: "https://a", apiKey: "k", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "k", model: "w" },
+        nativeLanguage: "zh-CN",
+        targetLanguage: "ja",
+      });
+      const slots = {
+        textModel: { baseUrl: "https://a", apiKey: "k", model: "m" },
+        transcriptionModel: { baseUrl: "https://a", apiKey: "k", model: "w" },
+        nativeLanguage: "zh-CN",
+      };
+
+      const cleared = await app.request("/api/settings", {
+        method: "PUT",
+        headers: auth,
+        body: JSON.stringify(slots),
+      });
+      assert.equal(cleared.status, 200);
+      assert.equal(
+        (await storage.readDoc<Settings>("settings.json"))?.targetLanguage,
+        undefined,
+        "an absent studied language means detect it, not keep the old one",
+      );
+
+      // Absent is "auto"; present but unknown is still a mistake.
+      const bogus = await app.request("/api/settings", {
+        method: "PUT",
+        headers: auth,
+        body: JSON.stringify({ ...slots, targetLanguage: "tlh" }),
+      });
+      assert.equal(bogus.status, 400);
+    });
+
     it("hands back the real keys only from the reveal route", async () => {
       await storage.writeDoc("settings.json", {
         textModel: { baseUrl: "https://a", apiKey: "sk-supersecret1234", model: "m" },
@@ -534,7 +568,7 @@ describe("http app", () => {
   });
 
   describe("ask AI", () => {
-    it("asks in the target language and answers in the native one", async () => {
+    it("asks its question in the native language", async () => {
       await storage.writeDoc("settings.json", {
         textModel: { baseUrl: "https://a", apiKey: "k", model: "m" },
         transcriptionModel: { baseUrl: "https://a", apiKey: "k", model: "w" },
@@ -551,9 +585,9 @@ describe("http app", () => {
 
       assert.equal(response.status, 200);
       assert.equal(body, "This sentence introduces yourself.");
-      assert.match(asked[0] ?? "", /Japanese/);
-      assert.match(asked[0] ?? "", /Simplified Chinese/);
-      assert.match(asked[0] ?? "", /今日は自己紹介をします/);
+      // The prompt is written in the user's own language, which is also what makes
+      // the answer come back in it — no sentence instructing the model to.
+      assert.equal(asked[0], "帮我理解这个句子：今日は自己紹介をします");
     });
 
     it("passes a model failure through with its reason, not as a generic 500", async () => {

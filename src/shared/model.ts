@@ -87,7 +87,7 @@ export interface Line {
   /** Native-language text. Absent until annotation has run. */
   translation?: string;
   words?: Word[];
-  /** Only present when the Resource's targetLanguage is Japanese. */
+  /** Only present when the Line's text is Japanese. */
   tokens?: Token[];
 }
 
@@ -105,9 +105,10 @@ export interface Resource {
   /**
    * The language pair this Resource was transcribed and translated in — recorded
    * here rather than read from Settings at display time, so changing your settings
-   * later cannot misdescribe Transcripts that already exist.
+   * later cannot misdescribe Transcripts that already exist. The studied language is
+   * absent when the import was left to detect it, which is the default.
    */
-  targetLanguage: LanguageCode;
+  targetLanguage?: LanguageCode;
   nativeLanguage: LanguageCode;
   /** ISO 8601. */
   importedAt: string;
@@ -132,7 +133,12 @@ export interface Settings {
   textModel: ModelSlot;
   transcriptionModel: ModelSlot;
   nativeLanguage: LanguageCode;
-  targetLanguage: LanguageCode;
+  /**
+   * What the user is studying. Optional: unset means the Transcription Model is left
+   * to detect the recording's own language and the translation prompt is not told
+   * one either, which is what makes a mixed shelf work without editing this first.
+   */
+  targetLanguage?: LanguageCode;
 }
 
 /** Every key the Storage seam is asked for, in one place (ADR 0007). */

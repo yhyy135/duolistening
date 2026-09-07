@@ -70,8 +70,11 @@ Word-by-word highlighting needs word-level timestamps. duolistening asks for the
 and quietly falls back to highlighting the whole line when a provider will not give
 them, so a provider that lacks them still works, just less precisely.
 
-Set the language pair here too: what you are studying, and what to translate into.
-It is recorded on each import, so changing it later never mislabels transcripts you
+Set your Native Language here too — it is what everything is translated into, and
+the interface follows it. The language you are studying is optional: leave it on
+auto-detect and each import works out what it is hearing, which is what makes a shelf
+of Japanese, Spanish and English episodes work without changing this first. Both are
+recorded on each import, so changing them later never mislabels transcripts you
 already have.
 
 ## Configuration

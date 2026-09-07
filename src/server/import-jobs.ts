@@ -123,7 +123,7 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
           await library.save(current, fetched ? { audioPath: fetched } : undefined);
 
           transcript = await options.transcriber(settings).transcribe(audioPath as string, {
-            language: settings.targetLanguage,
+            ...(settings.targetLanguage && { language: settings.targetLanguage }),
             onProgress: (fraction) => publish(id, { progress: fraction }),
           });
         }
@@ -139,7 +139,7 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
           await options.annotator(settings)
         ).annotate(transcript, {
           nativeLanguage: settings.nativeLanguage,
-          targetLanguage: settings.targetLanguage,
+          ...(settings.targetLanguage && { targetLanguage: settings.targetLanguage }),
           onProgress: (fraction) => publish(id, { progress: fraction }),
           // The Resource is already playable once transcription is done (below), so
           // each batch is saved as it lands instead of only the final, fully-annotated
@@ -176,7 +176,9 @@ export function createImportJobs(options: ImportJobsOptions): ImportJobs {
         // Replaced with the real title once ingest reports it.
         title: ref.kind === "podcast" ? ref.title : ref.url,
         durationSec: 0,
-        targetLanguage: settings.targetLanguage,
+        // Absent when the studied language is left unset: the recording's own language
+        // is whatever the Transcription Model heard, and nothing here claims otherwise.
+        ...(settings.targetLanguage && { targetLanguage: settings.targetLanguage }),
         nativeLanguage: settings.nativeLanguage,
         importedAt: new Date().toISOString(),
         phase: "queued",

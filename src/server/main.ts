@@ -8,7 +8,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { serve } from "@hono/node-server";
 import type { MiddlewareHandler } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { JAPANESE, type Settings } from "../shared/model.ts";
+import type { Settings } from "../shared/model.ts";
 import { createAnnotator } from "./annotator.ts";
 import { createApp } from "./app.ts";
 import { createFfmpegAudioTool } from "./audio/ffmpeg.ts";
@@ -19,7 +19,7 @@ import { createJapaneseTokenizerOnce } from "./japanese.ts";
 import { createLibrary } from "./library.ts";
 import { createSettingsCheck } from "./model-check.ts";
 import { createPodcastFeed } from "./podcast-feed.ts";
-import type { JapaneseTokenizer, Storage } from "./ports.ts";
+import type { Storage } from "./ports.ts";
 import { readSettings } from "./settings.ts";
 import { createLocalMediaServer, createLocalStorage } from "./storage/local.ts";
 import { createS3Storage } from "./storage/s3.ts";
@@ -41,7 +41,8 @@ const podcastFeed = createPodcastFeed();
 const ingestor = createIngestor({ audio });
 
 // Loaded on the first Japanese import and kept — someone studying Korean never pays
-// for the dictionary, and someone studying Japanese pays once.
+// for the dictionary, and someone studying Japanese pays once. Handed to the Annotator
+// unbuilt, because with the studied language optional only the Transcript knows.
 const japaneseTokenizer = createJapaneseTokenizerOnce();
 
 const textModelFor = (settings: Settings) => createTextModel({ slot: settings.textModel });
@@ -53,13 +54,8 @@ const importJobs = createImportJobs({
   ingestor,
   settings: () => readSettings(storage),
   transcriber: (settings) => createTranscriber({ audio, speech: speechToTextFor(settings) }),
-  annotator: async (settings) =>
-    createAnnotator({
-      textModel: textModelFor(settings),
-      ...(settings.targetLanguage === JAPANESE && {
-        tokenizer: (await japaneseTokenizer()) as JapaneseTokenizer,
-      }),
-    }),
+  annotator: (settings) =>
+    createAnnotator({ textModel: textModelFor(settings), tokenizer: japaneseTokenizer }),
 });
 
 const app = createApp({

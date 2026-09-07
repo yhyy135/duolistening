@@ -7,7 +7,8 @@ const DEFAULTS: Settings = {
   textModel: EMPTY_SLOT,
   transcriptionModel: EMPTY_SLOT,
   nativeLanguage: "en",
-  targetLanguage: "ja",
+  // No targetLanguage: unset means "detect it per recording", and a default here
+  // would silently pin every import to Japanese for someone who never opened Settings.
 };
 
 /** Marks a key the browser was never shown. Anything starting with it means "unchanged". */

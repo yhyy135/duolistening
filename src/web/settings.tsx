@@ -11,10 +11,13 @@ import {
   type SlotCheck,
 } from "../shared/model.ts";
 import { api, reason } from "./api.ts";
+import { useT } from "./i18n.ts";
 
 type SlotField = "textModel" | "transcriptionModel";
 
-export function SettingsScreen() {
+/** `onLocale` so the interface switches language the moment the Native Language does,
+    rather than on the next reload. */
+export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [check, setCheck] = useState<SettingsCheck | null>(null);
@@ -30,6 +33,7 @@ export function SettingsScreen() {
   // What is actually stored, so Back can tell a real edit from a screen nobody
   // touched without asking the server again.
   const savedRef = useRef<Settings | null>(null);
+  const t = useT();
 
   useEffect(() => {
     api.settings().then(
@@ -41,7 +45,7 @@ export function SettingsScreen() {
     );
   }, []);
 
-  if (!settings) return <p className="notice">{status ?? "Loading…"}</p>;
+  if (!settings) return <p className="notice">{status ?? t("common.loading")}</p>;
 
   const edit = (change: Partial<Settings>) => {
     setSettings({ ...settings, ...change });
@@ -53,7 +57,9 @@ export function SettingsScreen() {
 
   const goBack = () => {
     const dirty = JSON.stringify(settings) !== JSON.stringify(savedRef.current);
-    if (dirty && !confirm("Discard unsaved changes?")) return;
+    if (dirty && !confirm(t("settings.discard"))) return;
+    // The interface followed the unsaved Native Language; discarding puts it back.
+    if (savedRef.current) onLocale(savedRef.current.nativeLanguage);
     history.back();
   };
 
@@ -97,7 +103,7 @@ export function SettingsScreen() {
         ...current,
         [field]: {
           ok: true,
-          detail: `${models.length} model${models.length === 1 ? "" : "s"} found.`,
+          detail: t("settings.modelsFound", { count: models.length }),
         },
       }));
     } catch (failure) {
@@ -113,12 +119,12 @@ export function SettingsScreen() {
   return (
     <main className="settings">
       <button type="button" className="back" onClick={goBack}>
-        ← Back
+        {t("common.back")}
       </button>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          setStatus("Saving…");
+          setStatus(t("common.saving"));
           try {
             // The reply re-masks both keys, so what is on screen keeps matching what
             // is stored — and a second save in a row still means "leave them alone".
@@ -126,7 +132,7 @@ export function SettingsScreen() {
             savedRef.current = saved;
             setSettings(saved);
             setRevealed({});
-            setStatus("Saved");
+            setStatus(t("common.saved"));
           } catch (failure) {
             setStatus(reason(failure));
           }
@@ -136,26 +142,34 @@ export function SettingsScreen() {
             setting someone actually comes back to change, while a key mistyped once
             is rarely touched again. */}
         <fieldset>
-          <legend>Languages</legend>
+          <legend>{t("settings.languages")}</legend>
           <label>
-            Studying
-            <LanguageSelect
-              value={settings.targetLanguage}
-              onChange={(targetLanguage) => edit({ targetLanguage })}
-            />
-          </label>
-          <label>
-            Translate into
+            {t("settings.native")}
             <LanguageSelect
               value={settings.nativeLanguage}
-              onChange={(nativeLanguage) => edit({ nativeLanguage })}
+              onChange={(nativeLanguage) => {
+                // Only reachable with a real language: this select has no empty option.
+                if (!nativeLanguage) return;
+                edit({ nativeLanguage });
+                onLocale(nativeLanguage);
+              }}
+            />
+          </label>
+          {/* Optional, and empty by default: each import detects its own language, so
+              this is only worth setting to overrule a recording the model mishears. */}
+          <label>
+            {t("settings.studying")}
+            <LanguageSelect
+              value={settings.targetLanguage}
+              auto={t("settings.autoDetect")}
+              onChange={(targetLanguage) => edit({ targetLanguage })}
             />
           </label>
         </fieldset>
 
         <Slot
           field="textModel"
-          legend="Text Model — translation and the ask-AI popup"
+          legend={t("settings.textModel")}
           modelHint="gpt-4o-mini"
           slot={settings.textModel}
           check={check?.textModel}
@@ -170,9 +184,9 @@ export function SettingsScreen() {
         />
         <Slot
           field="transcriptionModel"
-          legend="Transcription Model — speech to text"
+          legend={t("settings.transcriptionModel")}
           modelHint="whisper-1"
-          hint="Groq runs Whisper for free: try https://api.groq.com/openai/v1 with model whisper-large-v3-turbo — get a key at console.groq.com."
+          hint={t("settings.groqHint")}
           slot={settings.transcriptionModel}
           check={check?.transcriptionModel}
           revealed={!!revealed.transcriptionModel}
@@ -186,14 +200,14 @@ export function SettingsScreen() {
         />
 
         <div className="actions">
-          <button type="submit">Save</button>
+          <button type="submit">{t("common.save")}</button>
           <button
             type="button"
             className="ghost"
             disabled={checking}
             onClick={() => void test()}
           >
-            {checking ? "Testing…" : "Test connection"}
+            {checking ? t("settings.testing") : t("settings.test")}
           </button>
           {status && <span className="notice">{status}</span>}
         </div>
@@ -240,12 +254,13 @@ function Slot({
   onChange: (slot: ModelSlot) => void;
 }) {
   const datalistId = `models-${field}`;
+  const t = useT();
   return (
     <fieldset>
       <legend>{legend}</legend>
       {hint && <p className="hint">{hint}</p>}
       <label>
-        Base URL
+        {t("settings.baseUrl")}
         <input
           value={slot.baseUrl}
           placeholder="https://api.openai.com/v1"
@@ -253,7 +268,7 @@ function Slot({
         />
       </label>
       <label>
-        API key
+        {t("settings.apiKey")}
         <span className="field-row">
           {/* Arrives masked (••••abcd). Sending it back unchanged keeps the stored
               key; Show fetches the real one so a typo can be fixed in place instead
@@ -264,13 +279,13 @@ function Slot({
           />
           {!revealed && slot.apiKey.startsWith(MASKED) && (
             <button type="button" className="ghost" disabled={revealing} onClick={onReveal}>
-              {revealing ? "…" : "Show"}
+              {revealing ? "…" : t("settings.show")}
             </button>
           )}
         </span>
       </label>
       <label>
-        Model
+        {t("settings.model")}
         <span className="field-row">
           {/* A native datalist: typing filters the fetched list, and a model the
               list does not have can still be typed by hand — the same freedom the
@@ -287,7 +302,7 @@ function Slot({
             disabled={fetchingModels}
             onClick={onFetchModels}
           >
-            {fetchingModels ? "Fetching…" : "Fetch models"}
+            {fetchingModels ? t("settings.fetching") : t("settings.fetchModels")}
           </button>
         </span>
         {modelOptions && (
@@ -305,7 +320,7 @@ function Slot({
       )}
       {check && (
         <p className={check.ok ? "slot-check ok" : "slot-check bad"}>
-          {check.ok ? "✓ Answered." : check.detail}
+          {check.ok ? t("settings.answered") : check.detail}
         </p>
       )}
     </fieldset>
@@ -332,15 +347,22 @@ function languageLabel(code: LanguageCode): string {
   return native === english ? native : `${native} - ${english}`;
 }
 
+/** With `auto`, an empty option is offered and an empty value means "detect it". */
 function LanguageSelect({
   value,
+  auto,
   onChange,
 }: {
-  value: LanguageCode;
-  onChange: (code: LanguageCode) => void;
+  value: LanguageCode | undefined;
+  auto?: string;
+  onChange: (code: LanguageCode | undefined) => void;
 }) {
   return (
-    <select value={value} onChange={(event) => onChange(event.target.value as LanguageCode)}>
+    <select
+      value={value ?? ""}
+      onChange={(event) => onChange((event.target.value || undefined) as LanguageCode)}
+    >
+      {auto !== undefined && <option value="">{auto}</option>}
       {LANGUAGES.map((code) => (
         <option key={code} value={code}>
           {languageLabel(code)}

@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import type { JobState, Line, Token } from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
 import { type PlayableResource, api, reason } from "./api.ts";
+import { useT } from "./i18n.ts";
 
 /** The stops worth one click. Slow first: this is a listening tool, not a podcast app. */
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -31,6 +32,7 @@ export function PlayerScreen({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
+  const t = useT();
   const [rate, setRate] = useState(storedRate);
   // On by default; a user scroll turns it off and it stays off, no timer. The only
   // way back is the floating control, once the reader wants to be found again.
@@ -261,7 +263,7 @@ export function PlayerScreen({ id }: { id: string }) {
   }, [position.lineIndex, following]);
 
   if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="notice">Loading…</p>;
+  if (!data) return <p className="notice">{t("common.loading")}</p>;
 
   const { resource, transcript, playbackUrl } = data;
   const seek = (line: Line) => {
@@ -277,7 +279,7 @@ export function PlayerScreen({ id }: { id: string }) {
       <h1>{resource.title}</h1>
       {resource.phase === "annotating" && (
         <p className="notice">
-          Translating…
+          {t("player.translating")}
           {translating?.progress !== undefined && ` ${Math.round(translating.progress * 100)}%`}
         </p>
       )}
@@ -295,7 +297,7 @@ export function PlayerScreen({ id }: { id: string }) {
       <Transport rate={rate} onRate={setRate} loop={loop} onLoop={setLoop} />
 
       {transcript.length === 0 ? (
-        <p className="notice">No transcript yet.</p>
+        <p className="notice">{t("player.noTranscript")}</p>
       ) : (
         <div className="lyrics-wrap">
           <ol
@@ -330,7 +332,7 @@ export function PlayerScreen({ id }: { id: string }) {
               className="jump-to-current"
               onClick={() => setFollowing(true)}
             >
-              Jump to current line
+              {t("player.jumpToCurrent")}
             </button>
           )}
         </div>
@@ -358,6 +360,7 @@ function Transport({
   loop: boolean;
   onLoop: (loop: boolean) => void;
 }) {
+  const t = useT();
   return (
     <div className="transport">
       <div className="rates">
@@ -380,14 +383,14 @@ function Transport({
         type="button"
         className={`loop ${loop ? "on" : ""}`}
         aria-pressed={loop}
-        title="Repeat the current line"
+        title={t("player.repeatTitle")}
         onClick={() => onLoop(!loop)}
       >
-        ↻ Repeat
+        {t("player.repeat")}
       </button>
 
       <label className="custom">
-        <span className="visually-hidden">Playback speed</span>
+        <span className="visually-hidden">{t("player.speed")}</span>
         <input
           type="range"
           min="0.5"
@@ -406,14 +409,14 @@ function Transport({
       </label>
 
       <p className="shortcuts">
-        <kbd>Space</kbd> play
+        <kbd>Space</kbd> {t("player.keyPlay")}
         <span className="gap" />
         <kbd>←</kbd>
-        <kbd>→</kbd> line
+        <kbd>→</kbd> {t("player.keyLine")}
         <span className="gap" />
-        <kbd>R</kbd> replay
+        <kbd>R</kbd> {t("player.keyReplay")}
         <span className="gap" />
-        <kbd>L</kbd> loop
+        <kbd>L</kbd> {t("player.keyLoop")}
       </p>
     </div>
   );
@@ -434,6 +437,7 @@ function LineRow({
   onSeek: () => void;
   onAsk: () => void;
 }) {
+  const t = useT();
   return (
     <li className={current ? (looping ? "current looping" : "current") : ""}>
       {/* A <button>, not an <li onClick> — Tab, Enter, the focus ring and the screen
@@ -445,7 +449,7 @@ function LineRow({
         </span>
         {line.translation && <span className="translation">{line.translation}</span>}
       </button>
-      <button className="ask" title="Ask about this line" onClick={onAsk}>
+      <button className="ask" title={t("player.askTitle")} onClick={onAsk}>
         ?
       </button>
     </li>
@@ -529,6 +533,7 @@ function TokenText({ token, sweep }: { token: Token; sweep: string }) {
 function AskDialog({ text, onClose }: { text: string | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [answer, setAnswer] = useState<string | null>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!text) return;
@@ -543,9 +548,13 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
     <dialog ref={dialogRef} className="ask-dialog" onClose={onClose}>
       <p className="text">{text}</p>
       <div className="answer">
-        {answer ? <Markdown remarkPlugins={[remarkGfm]}>{answer}</Markdown> : "Asking…"}
+        {answer ? (
+          <Markdown remarkPlugins={[remarkGfm]}>{answer}</Markdown>
+        ) : (
+          t("player.asking")
+        )}
       </div>
-      <button onClick={() => dialogRef.current?.close()}>Close</button>
+      <button onClick={() => dialogRef.current?.close()}>{t("common.close")}</button>
     </dialog>
   );
 }

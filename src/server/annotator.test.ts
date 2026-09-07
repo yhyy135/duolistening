@@ -109,7 +109,7 @@ describe("annotator", () => {
     const tokenizer = stubTokenizer();
     const annotator = createAnnotator({
       textModel: stubTextModel(translateEverything),
-      tokenizer,
+      tokenizer: async () => tokenizer,
     });
 
     const result = await annotator.annotate(lines(2), japanese);
@@ -118,11 +118,43 @@ describe("annotator", () => {
     assert.equal(result[0]?.tokens?.[0]?.reading, "よみ");
   });
 
+  it("detects Japanese from the text when no target language is set", async () => {
+    const tokenizer = stubTokenizer();
+    const textModel = stubTextModel(translateEverything);
+    const annotator = createAnnotator({ textModel, tokenizer: async () => tokenizer });
+
+    // Kana is what gives Japanese away: kanji alone could be Chinese.
+    const kana: Transcript = [{ startSec: 0, endSec: 1, text: "これは日本語です" }];
+    const result = await annotator.annotate(kana, { nativeLanguage: "zh-CN" });
+
+    assert.deepEqual(tokenizer.calls, ["これは日本語です"]);
+    assert.equal(result[0]?.tokens?.[0]?.reading, "よみ");
+    // Nothing claims a source language the user never named — the model reads it
+    // off the lines, which is the whole point of leaving the setting empty.
+    assert.match(textModel.prompts[0] as string, /^Translate each numbered line into /);
+  });
+
+  it("leaves the tokenizer unbuilt for non-Japanese text with no target language", async () => {
+    let built = 0;
+    const result = await createAnnotator({
+      textModel: stubTextModel(translateEverything),
+      tokenizer: async () => {
+        built++;
+        return stubTokenizer();
+      },
+    }).annotate([{ startSec: 0, endSec: 1, text: "Une phrase en français." }], {
+      nativeLanguage: "en",
+    });
+
+    assert.equal(built, 0);
+    assert.equal(result[0]?.tokens, undefined);
+  });
+
   it("leaves tokens off entirely for other target languages", async () => {
     const tokenizer = stubTokenizer();
     const annotator = createAnnotator({
       textModel: stubTextModel(translateEverything),
-      tokenizer,
+      tokenizer: async () => tokenizer,
     });
 
     const result = await annotator.annotate(lines(2), {
@@ -168,7 +200,7 @@ describe("annotator", () => {
 
     const result = await annotator.annotate(lines(25), {
       ...japanese,
-      onBatch: (partial) => snapshots.push(partial),
+      onBatch: (partial) => void snapshots.push(partial),
     });
 
     assert.equal(snapshots.length, 3);

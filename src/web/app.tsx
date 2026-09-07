@@ -2,7 +2,9 @@
 // assumes the session is already good.
 
 import { useEffect, useState } from "react";
+import type { LanguageCode } from "../shared/model.ts";
 import { ApiError, api, reason, setOnUnauthorized } from "./api.ts";
+import { LOCALE_KEY, LocaleContext, useT } from "./i18n.ts";
 import { LibraryScreen } from "./library.tsx";
 import { PlayerScreen } from "./player.tsx";
 import { SettingsScreen } from "./settings.tsx";
@@ -15,7 +17,6 @@ import { SettingsScreen } from "./settings.tsx";
  */
 const THEMES = ["auto", "light", "dark"] as const;
 type Theme = (typeof THEMES)[number];
-const THEME_LABEL: Record<Theme, string> = { auto: "Auto", light: "Light", dark: "Dark" };
 const THEME_KEY = "duolistening.theme";
 
 function useTheme(): [Theme, () => void] {
@@ -46,10 +47,35 @@ function useHash(): string {
   return hash;
 }
 
+/**
+ * The Native Language, which is what every label on every screen is written in. Read
+ * from Settings once the gate is open, and remembered locally so the gate itself —
+ * which is drawn before any request can succeed — is already in the right language.
+ */
+function useLocale(gateOpen: boolean): [LanguageCode, (code: LanguageCode) => void] {
+  const [locale, setLocale] = useState<LanguageCode>(
+    () => (localStorage.getItem(LOCALE_KEY) as LanguageCode | null) ?? "en",
+  );
+
+  useEffect(() => {
+    if (!gateOpen) return;
+    api.settings().then(
+      (settings) => setLocale(settings.nativeLanguage),
+      () => undefined,
+    );
+  }, [gateOpen]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCALE_KEY, locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  return [locale, setLocale];
+}
+
 export function App() {
   const [gate, setGate] = useState<"checking" | "locked" | "open">("checking");
-  const [theme, cycleTheme] = useTheme();
-  const hash = useHash();
+  const [locale, setLocale] = useLocale(gate === "open");
 
   useEffect(() => {
     setOnUnauthorized(() => setGate("locked"));
@@ -59,8 +85,33 @@ export function App() {
     );
   }, []);
 
+  return (
+    <LocaleContext.Provider value={locale}>
+      <Shell gate={gate} onOpen={() => setGate("open")} onLocale={setLocale} />
+    </LocaleContext.Provider>
+  );
+}
+
+function Shell({
+  gate,
+  onOpen,
+  onLocale,
+}: {
+  gate: "checking" | "locked" | "open";
+  onOpen: () => void;
+  onLocale: (code: LanguageCode) => void;
+}) {
+  const [theme, cycleTheme] = useTheme();
+  const hash = useHash();
+  const t = useT();
+  const themeLabel: Record<Theme, string> = {
+    auto: t("theme.auto"),
+    light: t("theme.light"),
+    dark: t("theme.dark"),
+  };
+
   if (gate === "checking") return <p className="notice">…</p>;
-  if (gate === "locked") return <Gate onOpen={() => setGate("open")} />;
+  if (gate === "locked") return <Gate onOpen={onOpen} />;
 
   const resourceId = hash.startsWith("#/r/") ? decodeURIComponent(hash.slice(4)) : null;
   return (
@@ -69,15 +120,19 @@ export function App() {
         <a href="#/" className="brand">
           duolistening
         </a>
-        <a href="#/settings">Settings</a>
-        <button className="theme" onClick={cycleTheme} title="Theme: auto, light, dark">
-          {THEME_LABEL[theme]}
+        <a href="#/settings">{t("nav.settings")}</a>
+        <button
+          className="theme"
+          onClick={cycleTheme}
+          title={`${themeLabel.auto} / ${themeLabel.light} / ${themeLabel.dark}`}
+        >
+          {themeLabel[theme]}
         </button>
       </header>
       {resourceId ? (
         <PlayerScreen id={resourceId} />
       ) : hash === "#/settings" ? (
-        <SettingsScreen />
+        <SettingsScreen onLocale={onLocale} />
       ) : (
         <LibraryScreen />
       )}
@@ -93,6 +148,7 @@ export function App() {
 function Gate({ onOpen }: { onOpen: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const t = useT();
 
   return (
     <form
@@ -104,7 +160,7 @@ function Gate({ onOpen }: { onOpen: () => void }) {
           await api.login(password);
           onOpen();
         } catch (failure) {
-          setError(failure instanceof ApiError ? "Wrong password" : reason(failure));
+          setError(failure instanceof ApiError ? t("gate.wrongPassword") : reason(failure));
         }
       }}
     >
@@ -112,11 +168,11 @@ function Gate({ onOpen }: { onOpen: () => void }) {
       <input
         type="password"
         autoFocus
-        placeholder="Password"
+        placeholder={t("gate.password")}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
       />
-      <button type="submit">Enter</button>
+      <button type="submit">{t("gate.enter")}</button>
       {error && <p className="error">{error}</p>}
     </form>
   );

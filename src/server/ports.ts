@@ -106,7 +106,8 @@ export interface RawSegment {
  * chunking and stitching can be tested without a network or an API key.
  */
 export interface SpeechToText {
-  transcribeChunk(audioPath: string, language: LanguageCode): Promise<RawSegment[]>;
+  /** Language omitted means the endpoint detects the recording's own. */
+  transcribeChunk(audioPath: string, language?: LanguageCode): Promise<RawSegment[]>;
 }
 
 /**
@@ -123,7 +124,7 @@ export interface SpeechToText {
 export interface Transcriber {
   transcribe(
     audioPath: string,
-    opts: { language: LanguageCode; onProgress?: ProgressFn },
+    opts: { language?: LanguageCode; onProgress?: ProgressFn },
   ): Promise<Transcript>;
 }
 
@@ -148,7 +149,9 @@ export interface Annotator {
     lines: Transcript,
     opts: {
       nativeLanguage: LanguageCode;
-      targetLanguage: LanguageCode;
+      /** Omitted when it is unknown: the Text Model then reads the source language
+       *  off the Lines themselves, and Japanese is recognised from the text. */
+      targetLanguage?: LanguageCode;
       onProgress?: ProgressFn;
       /** Fired after each batch with the full Transcript so far, so a caller can let
        *  playback start before every batch has translated — the Resource is already

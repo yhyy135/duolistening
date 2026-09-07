@@ -28,11 +28,17 @@ export function createSpeechToText(options: SpeechToTextOptions): SpeechToText {
   const doFetch = options.fetch ?? globalThis.fetch;
   const endpoint = `${slot.baseUrl.replace(/\/$/, "")}/audio/transcriptions`;
 
-  async function post(audioPath: string, language: LanguageCode, withWords: boolean) {
+  async function post(
+    audioPath: string,
+    language: LanguageCode | undefined,
+    withWords: boolean,
+  ) {
     const form = new FormData();
     form.set("file", new Blob([await fs.readFile(audioPath)]), path.basename(audioPath));
     form.set("model", slot.model);
-    form.set("language", language);
+    // Omitted when the user has not said what they are studying — every
+    // OpenAI-compatible endpoint detects the language itself in that case.
+    if (language) form.set("language", language);
     form.set("response_format", "verbose_json");
     if (withWords) {
       form.append("timestamp_granularities[]", "segment");
@@ -51,7 +57,7 @@ export function createSpeechToText(options: SpeechToTextOptions): SpeechToText {
   }
 
   return {
-    async transcribeChunk(audioPath: string, language: LanguageCode): Promise<RawSegment[]> {
+    async transcribeChunk(audioPath: string, language?: LanguageCode): Promise<RawSegment[]> {
       let response = await post(audioPath, language, true);
 
       // Not every OpenAI-compatible implementation knows the granularities field.
