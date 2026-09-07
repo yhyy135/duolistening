@@ -1,4 +1,7 @@
-import kuromoji from "kuromoji";
+// Type-only, and it has to stay that way: a value import of kuromoji here would put
+// its 300KB back into the main bundle and undo the dynamic import below. This one is
+// erased at compile time, so the bundler never sees a reference.
+import type { IpadicFeatures } from "kuromoji";
 import type { PartOfSpeech, Token } from "../shared/model.ts";
 
 /**
@@ -45,8 +48,15 @@ const HAS_KANJI = /[㐀-䶿一-鿿]/;
  * means the twelve `.dat.gz` files (17MB on disk, gunzipped in the browser by
  * kuromoji's own zlibjs, ADR 0008) must be served from this origin. Getting them
  * there is a build concern and deliberately not this module's.
+ *
+ * kuromoji itself is reached through a dynamic `import()`, which is not a stylistic
+ * choice: a static one puts its 300KB into the main bundle for every reader, and most
+ * readers are not studying Japanese. This way the bundler splits it off and nobody
+ * pays for it until a Transcript turns out to have kana in it — the same condition
+ * the Annotator's tokenizer thunk already gates the dictionary download on.
  */
-export function createKuromojiTokenizer(dicPath: string): Promise<JapaneseTokenizer> {
+export async function createKuromojiTokenizer(dicPath: string): Promise<JapaneseTokenizer> {
+  const { default: kuromoji } = await import("kuromoji");
   return new Promise((resolve, reject) => {
     kuromoji.builder({ dicPath }).build((error, tokenizer) => {
       if (error) return reject(error);
@@ -67,7 +77,7 @@ export function createJapaneseTokenizerOnce(dicPath: string): () => Promise<Japa
   return () => (pending ??= createKuromojiTokenizer(dicPath));
 }
 
-function toToken(word: kuromoji.IpadicFeatures): Token {
+function toToken(word: IpadicFeatures): Token {
   const surface = word.surface_form;
   // `reading`, not `pronunciation`: pronunciation writes long vowels as ー
   // (ショーカイ), which is how it sounds but not how the furigana is written.
