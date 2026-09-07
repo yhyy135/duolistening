@@ -1,12 +1,70 @@
+/* One palette, both themes, one line per token. `color-scheme` decides which half of
+   every light-dark() below applies — and hands the same decision to the parts this
+   file does not draw: the <audio> controls, the scrollbars, the form widgets. Keeping
+   both values on one line is the point: a token cannot be restyled for one theme and
+   forgotten in the other, which is the bug only half the users would ever see. */
 :root {
-  --bg: #12141a;
-  --panel: #1a1d26;
-  --line: #262a36;
-  --ink: #e6e8ef;
-  --dim: #8b91a3;
-  --accent: #7aa2ff;
-  --bad: #ff7a7a;
+  color-scheme: light dark;
+
+  --bg: light-dark(#f4f5f8, #12141a);
+  --panel: light-dark(#fdfdfe, #1a1d26);
+  --line: light-dark(#e0e3ea, #262a36);
+  --ink: light-dark(#1a1d26, #e6e8ef);
+  --dim: light-dark(#626878, #8b91a3);
+  --accent: light-dark(#2c5ad4, #7aa2ff);
+  --bad: light-dark(#c62f2f, #ff7a7a);
+  --good: light-dark(#16794f, #7ad9a1);
+  --hover: light-dark(#e7eaf1, #333849);
+  --sweep: light-dark(#d6e2fb, #333c55);
+  --backdrop: light-dark(#1a1d2680, #000000b3);
+
+  /* The closed set from model.ts — every PartOfSpeech has a colour, so an unstyled
+     morpheme means the map drifted. */
+  --pos-noun: light-dark(#1f6099, #8ec7ff);
+  --pos-verb: light-dark(#a1481a, #ff9f7a);
+  --pos-adjective: light-dark(#7a5500, #ffd479);
+  --pos-adverb: light-dark(#5f39ab, #c9a2ff);
+  --pos-particle: light-dark(#6a7180, #7c8496);
+  --pos-auxiliary: light-dark(#5b6478, #9aa4bd);
+  --pos-conjunction: light-dark(#0d6b5c, #7ad9c4);
+  --pos-prefix: light-dark(#8a5050, #d0a6a6);
+  --pos-interjection: light-dark(#a82f72, #ff9ecb);
+}
+
+/* The manual override, and the whole of it: "auto" is the absence of this attribute,
+   which hands the choice back to the system. Nothing else in the file changes. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+/* light-dark() takes colours only, so the one token that is not a colour states both
+   themes the long way. On a dark ground a `pending` Word is still a light shape
+   against black; on a light ground the same opacity walks it into the background. */
+:root {
+  --pending: 0.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pending: 0.4;
+  }
+}
+:root[data-theme="dark"] {
+  --pending: 0.4;
+}
+
+/* The sweep is the only motion this app needs. Everything else is a courtesy, and a
+   courtesy is exactly what someone with a vestibular disorder wants switched off. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 * {
@@ -37,6 +95,13 @@ a {
   text-decoration: none;
 }
 
+/* One ring for everything, and only for keyboard focus — a mouse user who just
+   clicked a Line does not need to be told where they clicked. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 button {
   font: inherit;
   color: var(--ink);
@@ -45,9 +110,15 @@ button {
   border-radius: 6px;
   padding: 0.4em 0.9em;
   cursor: pointer;
+  transition:
+    background-color 0.15s,
+    transform 0.06s;
 }
 button:hover:not(:disabled) {
-  background: #333849;
+  background: var(--hover);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 button:disabled {
   opacity: 0.5;
@@ -57,9 +128,29 @@ button.ghost {
   background: none;
   color: var(--dim);
 }
-button.ghost:hover {
+button.ghost:hover:not(:disabled) {
   color: var(--bad);
   background: none;
+}
+
+/* Present to a screen reader, absent to everyone else — the slider's own label,
+   which the visible number beside it already does for sighted users. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+kbd {
+  font: inherit;
+  font-size: 0.9em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.35em;
+  color: var(--ink);
 }
 
 input,
@@ -92,6 +183,18 @@ header a:not(.brand) {
   color: var(--dim);
 }
 header a:not(.brand):hover {
+  color: var(--ink);
+}
+/* Reads as the third header link rather than a control, because that is how often
+   it is used: once, if ever. The label is the current mode, so the button says what
+   the page is doing without needing a second element to say it. */
+button.theme {
+  background: none;
+  color: var(--dim);
+  padding: 0;
+}
+button.theme:hover:not(:disabled) {
+  background: none;
   color: var(--ink);
 }
 
@@ -188,6 +291,29 @@ main {
   color: var(--bad);
 }
 
+/* An import runs for minutes. A percentage reads at a glance only once you stop to
+   read it; a bar reads while scrolling past. */
+.shelf progress {
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border: 0;
+  background: var(--line);
+  border-radius: 2px;
+}
+.shelf progress::-webkit-progress-bar {
+  background: var(--line);
+  border-radius: 2px;
+}
+.shelf progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 2px;
+}
+.shelf progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 2px;
+}
+
 /* ---- player ---- */
 
 main.player {
@@ -203,6 +329,84 @@ main.player audio {
   width: 100%;
 }
 
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.5rem;
+}
+.rates {
+  display: flex;
+  gap: 0.2rem;
+}
+.rates button {
+  background: none;
+  color: var(--dim);
+  padding: 0.25em 0.55em;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.rates button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.rates button.on {
+  background: var(--accent);
+  color: var(--bg);
+}
+.transport button.loop.on {
+  background: var(--accent);
+  color: var(--bg);
+}
+.transport .custom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.transport input[type="range"] {
+  width: 7rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--accent);
+}
+.shortcuts {
+  flex-basis: 100%;
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.shortcuts .gap {
+  width: 0.5rem;
+}
+/* A phone has no Space bar, and the hint costs a whole row on the screen with the
+   fewest of them. The slider gives up its right-hand berth on the same reasoning:
+   once it wraps, hugging the far edge reads as a stray control. */
+@media (hover: none) {
+  .shortcuts {
+    display: none;
+  }
+}
+@media (width < 30rem) {
+  .transport .custom {
+    margin-left: 0;
+  }
+}
+
+.lyrics-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 .lyrics {
   list-style: none;
   flex: 1;
@@ -219,30 +423,63 @@ main.player audio {
   height: 45vh;
 }
 
+/* Positioned against the wrap, not the list, so it stays put on screen instead of
+   scrolling away with the content it floats over. */
+.jump-to-current {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  box-shadow: 0 2px 10px var(--backdrop);
+}
+
 .lyrics li {
   position: relative;
-  padding: 0.55rem 2rem 0.55rem 0.6rem;
   border-radius: 8px;
-  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.lyrics li:hover,
+.lyrics li.current {
+  background: var(--panel);
+}
+/* A border rather than another background tint — the current Line already has one,
+   and the two need to read as different facts (playing vs. also on repeat). */
+.lyrics li.looping {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* A real <button>, not an <li onClick> — that is what buys Tab, Enter and Space,
+   the focus ring, and the screen-reader announcement, none of which a div can fake. */
+.lyrics .seek {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border-radius: 8px;
+  padding: 0.55rem 2rem 0.55rem 0.6rem;
   color: var(--dim);
   transition: color 0.2s;
 }
-.lyrics li:hover {
-  background: var(--panel);
+.lyrics .seek:hover:not(:disabled),
+.lyrics .seek:active:not(:disabled) {
+  background: none;
+  transform: none;
 }
-.lyrics li.current {
+.lyrics li.current .seek {
   color: var(--ink);
-  background: var(--panel);
 }
+
 .lyrics .text {
-  margin: 0;
+  display: block;
   font-size: 1.15rem;
 }
 .lyrics li.current .text {
   font-size: 1.35rem;
 }
 .lyrics .translation {
-  margin: 0.15rem 0 0;
+  display: block;
+  margin-top: 0.15rem;
   font-size: 0.9rem;
   color: var(--dim);
 }
@@ -253,7 +490,7 @@ main.player audio {
 }
 .word.pending,
 .tok.pending {
-  opacity: 0.4;
+  opacity: var(--pending);
 }
 .word.now {
   color: var(--accent);
@@ -262,8 +499,8 @@ main.player audio {
    the whole Line shuffles sideways on every word. Colour stays the Token's, so the
    part-of-speech is still readable underneath. */
 .tok.now {
-  background: #333c55;
-  box-shadow: 0 0 0 2px #333c55;
+  background: var(--sweep);
+  box-shadow: 0 0 0 2px var(--sweep);
   border-radius: 3px;
 }
 
@@ -273,34 +510,32 @@ rt {
   user-select: none;
 }
 
-/* The closed set from model.ts — every PartOfSpeech has a colour, so an
-   unstyled morpheme means the map drifted. */
 .pos-noun {
-  color: #8ec7ff;
+  color: var(--pos-noun);
 }
 .pos-verb {
-  color: #ff9f7a;
+  color: var(--pos-verb);
 }
 .pos-adjective {
-  color: #ffd479;
+  color: var(--pos-adjective);
 }
 .pos-adverb {
-  color: #c9a2ff;
+  color: var(--pos-adverb);
 }
 .pos-particle {
-  color: #7c8496;
+  color: var(--pos-particle);
 }
 .pos-auxiliary {
-  color: #9aa4bd;
+  color: var(--pos-auxiliary);
 }
 .pos-conjunction {
-  color: #7ad9c4;
+  color: var(--pos-conjunction);
 }
 .pos-prefix {
-  color: #d0a6a6;
+  color: var(--pos-prefix);
 }
 .pos-interjection {
-  color: #ff9ecb;
+  color: var(--pos-interjection);
 }
 .pos-symbol,
 .pos-other {
@@ -317,8 +552,15 @@ button.ask {
   opacity: 0;
 }
 .lyrics li:hover .ask,
-.lyrics li.current .ask {
+.lyrics li.current .ask,
+.lyrics .ask:focus-visible {
   opacity: 1;
+}
+/* Nothing hovers on a touchscreen, so hover-to-reveal hides the button forever. */
+@media (hover: none) {
+  button.ask {
+    opacity: 1;
+  }
 }
 
 .ask-dialog {
@@ -330,7 +572,7 @@ button.ask {
   padding: 1.2rem;
 }
 .ask-dialog::backdrop {
-  background: #000a;
+  background: var(--backdrop);
 }
 .ask-dialog .text {
   margin: 0 0 0.8rem;
@@ -387,7 +629,7 @@ button.ask {
   overflow-wrap: anywhere;
 }
 .slot-check.ok {
-  color: #7ad9a1;
+  color: var(--good);
 }
 .slot-check.bad {
   color: var(--bad);

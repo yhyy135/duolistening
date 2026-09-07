@@ -360,6 +360,16 @@ describe("http app", () => {
       assert.equal(ok.status, 204);
       assert.equal((await library.get("abc"))?.resource.lastPositionSec, 81.5);
 
+      // sendBeacon, used to save on tab close, can only POST — the route answers to
+      // both methods so that save path works too.
+      const beacon = await app.request("/api/library/abc/position", {
+        method: "POST",
+        headers: auth,
+        body: JSON.stringify({ seconds: 90 }),
+      });
+      assert.equal(beacon.status, 204);
+      assert.equal((await library.get("abc"))?.resource.lastPositionSec, 90);
+
       const bad = await app.request("/api/library/abc/position", {
         method: "PUT",
         headers: auth,

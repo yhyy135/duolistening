@@ -85,6 +85,18 @@ export const api = {
   remove: (id: ResourceId) => request<void>(`/api/library/${id}`, { method: "DELETE" }),
   savePosition: (id: ResourceId, seconds: number) =>
     send<void>(`/api/library/${id}/position`, "PUT", { seconds }),
+  /**
+   * The same save, for the moments a normal request can't be trusted to finish: the
+   * tab closing, the browser quitting, iOS Safari backgrounding the page. `fetch` can
+   * be aborted mid-flight once the page starts tearing down; the browser queues a
+   * beacon to complete regardless. It can only POST — the server route answers to
+   * both — and can't set headers, so the content type rides on the Blob itself, which
+   * is what lets the same JSON parsing on the server read the body.
+   */
+  savePositionBeacon: (id: ResourceId, seconds: number): void => {
+    const body = new Blob([JSON.stringify({ seconds })], { type: "application/json" });
+    navigator.sendBeacon(`/api/library/${id}/position`, body);
+  },
   /** Resumes a failed or abandoned import; the reply is a job to watch, as for a new one. */
   retry: (id: ResourceId) => send<JobState>(`/api/library/${id}/retry`, "POST", {}),
 

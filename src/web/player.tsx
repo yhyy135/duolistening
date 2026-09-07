@@ -7,27 +7,53 @@ import type { Line, Token } from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
 import { type PlayableResource, api, reason } from "./api.ts";
 
-/** How long a manual scroll wins over the auto-scroll that follows playback. */
-const SCROLL_GRACE_MS = 5000;
+/** The stops worth one click. Slow first: this is a listening tool, not a podcast app. */
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const RATE_KEY = "duolistening.rate";
+
+/** Native list-scrolling keys. Arrow-left/right are deliberately not here: those are
+    the app's own line shortcuts below, and a jump they cause should still be followed. */
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"]);
 
 const NOWHERE: Position = { lineIndex: -1, wordIndex: null };
+
+/** Playback speed is a habit, not a per-episode choice, so it outlives the page. */
+function storedRate(): number {
+  const stored = Number(localStorage.getItem(RATE_KEY));
+  return stored >= 0.5 && stored <= 2 ? stored : 1;
+}
 
 export function PlayerScreen({ id }: { id: string }) {
   const [data, setData] = useState<PlayableResource | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
+  const [rate, setRate] = useState(storedRate);
+  // On by default; a user scroll turns it off and it stays off, no timer. The only
+  // way back is the floating control, once the reader wants to be found again.
+  const [following, setFollowing] = useState(true);
+  const [loop, setLoop] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
-  const scrollPausedUntil = useRef(0);
   // The ref, not the audio element: on unmount React may have detached it already,
   // and the last position is the one thing that must survive leaving the screen.
   const seconds = useRef(0);
+  // Mirrors `loop` for the sampler effect below, which reads it every frame and must
+  // not be torn down and rebuilt each time the toggle is clicked.
+  const loopRef = useRef(false);
+  // The Line eligible to loop — always whichever one `sample` last landed on, so
+  // turning the toggle on mid-line loops whatever is already playing. `seek` and
+  // `jump` also set this the instant they fire: without that, clicking a later Line
+  // while looping would still find the old Line here, see the new time already past
+  // its endSec, and yank playback straight back to the Line just left.
+  const loopLine = useRef<Line | null>(null);
 
   useEffect(() => {
     setData(null);
     setPosition(NOWHERE);
+    setFollowing(true);
+    loopLine.current = null;
     api.resource(id).then(setData, (failure: unknown) => setError(reason(failure)));
   }, [id]);
 
@@ -37,6 +63,36 @@ export function PlayerScreen({ id }: { id: string }) {
     },
     [id],
   );
+
+  // Neither the unmount cleanup above nor the pause/seeked saves below run when the
+  // tab is closed, the browser quits, or iOS Safari backgrounds the app — pagehide
+  // and a visibilitychange to hidden are what's left to catch those.
+  useEffect(() => {
+    const onHide = () => {
+      if (seconds.current > 0) api.savePositionBeacon(id, seconds.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+    };
+    addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [id]);
+
+  // The element is the source of truth for the rate; this only keeps it in step.
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+    localStorage.setItem(RATE_KEY, String(rate));
+  }, [rate, data]);
+
+  // Mirrors `loop` for the sampler effect below, which reads it every frame and must
+  // not be torn down and rebuilt each time the toggle is clicked.
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
 
   /**
    * Follows playback frame by frame — `timeupdate` fires about four times a second,
@@ -50,8 +106,17 @@ export function PlayerScreen({ id }: { id: string }) {
 
     let frame = 0;
     const sample = () => {
+      // Checked against the Line `sample` landed on last time, not the one about to
+      // be computed below: back-to-back Lines share a boundary, so the instant
+      // currentTime passes this one's endSec is the same instant locate() would
+      // already call the next Line current. Checking the stale side of that instant
+      // first is what makes the loop land on the Line that just ended, not the next.
+      const looping = loopRef.current ? loopLine.current : null;
+      if (looping && audio.currentTime >= looping.endSec) audio.currentTime = looping.startSec;
+
       seconds.current = audio.currentTime;
       const next = locate(lines, audio.currentTime);
+      loopLine.current = next.lineIndex < 0 ? null : (lines[next.lineIndex] ?? null);
       setPosition((previous) =>
         previous.lineIndex === next.lineIndex && previous.wordIndex === next.wordIndex
           ? previous
@@ -72,26 +137,103 @@ export function PlayerScreen({ id }: { id: string }) {
       if (seconds.current > 0) void api.savePosition(id, seconds.current);
     };
 
+    // The saved position rides on timeupdate, not on the frame loop above:
+    // requestAnimationFrame is suspended in a hidden tab while the audio keeps
+    // playing, so a listener who switches tabs, listens on, and then closes the page
+    // would be rewound to wherever they switched away. timeupdate keeps firing there,
+    // and its four-times-a-second is coarse only for highlighting, never for a resume
+    // point. React detaches audioRef before this component's unmount cleanup runs, so
+    // reading the element at save time is not an option — the ref has to be current.
+    const mark = () => {
+      seconds.current = audio.currentTime;
+    };
+
     audio.addEventListener("play", start);
     audio.addEventListener("pause", stop);
     audio.addEventListener("seeked", sample);
+    audio.addEventListener("timeupdate", mark);
     if (!audio.paused) start();
     return () => {
       cancelAnimationFrame(frame);
       audio.removeEventListener("play", start);
       audio.removeEventListener("pause", stop);
       audio.removeEventListener("seeked", sample);
+      audio.removeEventListener("timeupdate", mark);
     };
   }, [data, id]);
 
-  // Keep the current Line in view, unless the user is reading somewhere else.
+  /**
+   * The shortcuts a listening tool actually needs. Line-granular, not ±5s: the whole
+   * point of the Transcript is that the Line is the unit worth repeating.
+   *
+   * Where playback is comes from the audio element, never from `position` — reading
+   * state here would re-bind this listener on every Word, sixty times a second.
+   */
   useEffect(() => {
-    if (position.lineIndex < 0 || Date.now() < scrollPausedUntil.current) return;
+    const lines = data?.transcript;
+    if (!lines?.length) return;
+
+    const jump = (delta: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      const here = locate(lines, audio.currentTime).lineIndex;
+      const index = Math.max(0, Math.min(lines.length - 1, here < 0 ? 0 : here + delta));
+      loopLine.current = lines[index]!;
+      audio.currentTime = lines[index]!.startSec;
+      void audio.play();
+    };
+
+    const onKey = (event: KeyboardEvent) => {
+      const audio = audioRef.current;
+      if (!audio || event.metaKey || event.ctrlKey || event.altKey) return;
+      // A text field, a select, or the open dialog owns its own keys. The instanceof
+      // is not ceremony: a keydown can be dispatched at the window, which has no
+      // closest() and would throw the listener away mid-press.
+      const target = event.target;
+      if (target instanceof Element && target.closest("input, textarea, select, dialog"))
+        return;
+
+      switch (event.key) {
+        // Space means play/pause everywhere on this screen, even on a focused button:
+        // preventDefault cancels that button's own activation, so there is one answer
+        // to one key rather than two depending on where focus happens to be.
+        case " ":
+          event.preventDefault();
+          if (audio.paused) void audio.play();
+          else audio.pause();
+          return;
+        case "ArrowLeft":
+          event.preventDefault();
+          return jump(-1);
+        case "ArrowRight":
+          event.preventDefault();
+          return jump(1);
+        case "r":
+        case "R":
+          event.preventDefault();
+          return jump(0);
+        case "l":
+        case "L":
+          event.preventDefault();
+          setLoop((was) => !was);
+          return;
+      }
+    };
+
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [data]);
+
+  // Keep the current Line in view while following is on. Re-running this when
+  // following turns back on is what sends the view straight to the current Line —
+  // the floating control just flips the flag, no separate imperative scroll needed.
+  useEffect(() => {
+    if (!following || position.lineIndex < 0) return;
     listRef.current?.children[position.lineIndex]?.scrollIntoView({
       block: "center",
-      behavior: "smooth",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
-  }, [position.lineIndex]);
+  }, [position.lineIndex, following]);
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="notice">Loading…</p>;
@@ -100,6 +242,7 @@ export function PlayerScreen({ id }: { id: string }) {
   const seek = (line: Line) => {
     const audio = audioRef.current;
     if (!audio) return;
+    loopLine.current = line;
     audio.currentTime = line.startSec;
     void audio.play();
   };
@@ -113,31 +256,48 @@ export function PlayerScreen({ id }: { id: string }) {
         controls
         preload="metadata"
         onLoadedMetadata={(event) => {
+          event.currentTarget.playbackRate = rate;
           const resume = resource.lastPositionSec ?? 0;
           if (resume > 0) event.currentTarget.currentTime = resume;
         }}
       />
+      <Transport rate={rate} onRate={setRate} loop={loop} onLoop={setLoop} />
 
       {transcript.length === 0 ? (
         <p className="notice">No transcript yet.</p>
       ) : (
-        <ol
-          className="lyrics"
-          ref={listRef}
-          onWheel={() => (scrollPausedUntil.current = Date.now() + SCROLL_GRACE_MS)}
-          onTouchMove={() => (scrollPausedUntil.current = Date.now() + SCROLL_GRACE_MS)}
-        >
-          {transcript.map((line, index) => (
-            <LineRow
-              key={index}
-              line={line}
-              current={index === position.lineIndex}
-              wordIndex={index === position.lineIndex ? position.wordIndex : null}
-              onSeek={() => seek(line)}
-              onAsk={() => setAsking(line.text)}
-            />
-          ))}
-        </ol>
+        <div className="lyrics-wrap">
+          <ol
+            className="lyrics"
+            ref={listRef}
+            onWheel={() => setFollowing(false)}
+            onTouchMove={() => setFollowing(false)}
+            onKeyDown={(event) => {
+              if (SCROLL_KEYS.has(event.key)) setFollowing(false);
+            }}
+          >
+            {transcript.map((line, index) => (
+              <LineRow
+                key={index}
+                line={line}
+                current={index === position.lineIndex}
+                looping={loop && index === position.lineIndex}
+                wordIndex={index === position.lineIndex ? position.wordIndex : null}
+                onSeek={() => seek(line)}
+                onAsk={() => setAsking(line.text)}
+              />
+            ))}
+          </ol>
+          {!following && position.lineIndex >= 0 && (
+            <button
+              type="button"
+              className="jump-to-current"
+              onClick={() => setFollowing(true)}
+            >
+              Jump to current line
+            </button>
+          )}
+        </div>
       )}
 
       <AskDialog text={asking} onClose={() => setAsking(null)} />
@@ -145,33 +305,111 @@ export function PlayerScreen({ id }: { id: string }) {
   );
 }
 
+/**
+ * Speed, pulled out of the native controls where only Chrome exposes it and only
+ * through a context menu. Six stops one click away, and a slider for everything
+ * between them — the stops are also the slider's tick marks, so the two controls
+ * are visibly the same scale rather than two ways to set the same number.
+ */
+function Transport({
+  rate,
+  onRate,
+  loop,
+  onLoop,
+}: {
+  rate: number;
+  onRate: (rate: number) => void;
+  loop: boolean;
+  onLoop: (loop: boolean) => void;
+}) {
+  return (
+    <div className="transport">
+      <div className="rates">
+        {RATES.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={value === rate ? "on" : ""}
+            aria-pressed={value === rate}
+            onClick={() => onRate(value)}
+          >
+            {value}×
+          </button>
+        ))}
+      </div>
+
+      {/* Drilling one hard sentence: hold the current Line until this goes off again,
+          or a different Line becomes current — see the sampler effect above. */}
+      <button
+        type="button"
+        className={`loop ${loop ? "on" : ""}`}
+        aria-pressed={loop}
+        title="Repeat the current line"
+        onClick={() => onLoop(!loop)}
+      >
+        ↻ Repeat
+      </button>
+
+      <label className="custom">
+        <span className="visually-hidden">Playback speed</span>
+        <input
+          type="range"
+          min="0.5"
+          max="2"
+          step="0.05"
+          list="rate-stops"
+          value={rate}
+          onChange={(event) => onRate(Number(event.target.value))}
+        />
+        <datalist id="rate-stops">
+          {RATES.map((value) => (
+            <option key={value} value={value} />
+          ))}
+        </datalist>
+        {rate.toFixed(2)}×
+      </label>
+
+      <p className="shortcuts">
+        <kbd>Space</kbd> play
+        <span className="gap" />
+        <kbd>←</kbd>
+        <kbd>→</kbd> line
+        <span className="gap" />
+        <kbd>R</kbd> replay
+        <span className="gap" />
+        <kbd>L</kbd> loop
+      </p>
+    </div>
+  );
+}
+
 function LineRow({
   line,
   current,
+  looping,
   wordIndex,
   onSeek,
   onAsk,
 }: {
   line: Line;
   current: boolean;
+  looping: boolean;
   wordIndex: number | null;
   onSeek: () => void;
   onAsk: () => void;
 }) {
   return (
-    <li className={current ? "current" : ""} onClick={onSeek}>
-      <p className="text">
-        <LineText line={line} current={current} wordIndex={wordIndex} />
-      </p>
-      {line.translation && <p className="translation">{line.translation}</p>}
-      <button
-        className="ask"
-        title="Ask about this line"
-        onClick={(event) => {
-          event.stopPropagation();
-          onAsk();
-        }}
-      >
+    <li className={current ? (looping ? "current looping" : "current") : ""}>
+      {/* A <button>, not an <li onClick> — Tab, Enter, the focus ring and the screen
+          reader all come free, and the ask button beside it stops being a click that
+          has to be swallowed before it reaches the Line underneath. */}
+      <button type="button" className="seek" onClick={onSeek}>
+        <span className="text">
+          <LineText line={line} current={current} wordIndex={wordIndex} />
+        </span>
+        {line.translation && <span className="translation">{line.translation}</span>}
+      </button>
+      <button className="ask" title="Ask about this line" onClick={onAsk}>
         ?
       </button>
     </li>

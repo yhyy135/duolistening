@@ -7,6 +7,34 @@ import { LibraryScreen } from "./library.tsx";
 import { PlayerScreen } from "./player.tsx";
 import { SettingsScreen } from "./settings.tsx";
 
+/**
+ * Auto, and the two ways to overrule it. Auto is stored and applied as the absence of
+ * `data-theme`, so the CSS needs no rule for it — the media query is simply back in
+ * charge. index.html applies the stored choice before first paint; this only keeps
+ * the attribute in step with the button.
+ */
+const THEMES = ["auto", "light", "dark"] as const;
+type Theme = (typeof THEMES)[number];
+const THEME_LABEL: Record<Theme, string> = { auto: "Auto", light: "Light", dark: "Dark" };
+const THEME_KEY = "duolistening.theme";
+
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem(THEME_KEY);
+    // Anything else in that key is someone else's data, or ours from a version that
+    // spelled it differently. Either way the system preference is the safe answer.
+    return THEMES.includes(stored as Theme) ? (stored as Theme) : "auto";
+  });
+
+  useEffect(() => {
+    if (theme === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
+  return [theme, () => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]!)];
+}
+
 /** The current hash route, re-read on every back/forward and every link click. */
 function useHash(): string {
   const [hash, setHash] = useState(() => location.hash || "#/");
@@ -20,6 +48,7 @@ function useHash(): string {
 
 export function App() {
   const [gate, setGate] = useState<"checking" | "locked" | "open">("checking");
+  const [theme, cycleTheme] = useTheme();
   const hash = useHash();
 
   useEffect(() => {
@@ -41,6 +70,9 @@ export function App() {
           duolistening
         </a>
         <a href="#/settings">Settings</a>
+        <button className="theme" onClick={cycleTheme} title="Theme: auto, light, dark">
+          {THEME_LABEL[theme]}
+        </button>
       </header>
       {resourceId ? (
         <PlayerScreen id={resourceId} />

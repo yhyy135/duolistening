@@ -132,7 +132,9 @@ export function createApp(options: AppOptions) {
     return context.body(null, 204);
   });
 
-  app.put("/api/library/:id/position", async (context) => {
+  // POST too, not just PUT: navigator.sendBeacon (the web half's save-on-unload path)
+  // can only send POST, and can't be made to send PUT instead.
+  app.on(["PUT", "POST"], "/api/library/:id/position", async (context) => {
     const { seconds } = await readJson<{ seconds?: unknown }>(context.req.raw);
     if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) {
       return context.json({ error: "seconds must be a non-negative number" }, 400);

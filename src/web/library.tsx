@@ -20,10 +20,13 @@ const formatTime = (seconds: number) =>
 export function LibraryScreen() {
   const [resources, setResources] = useState<Resource[] | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
+  const [silent, setSilent] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   // Closed on unmount: a browser only allows a handful of connections per host, and
   // a forgotten stream is one the <audio> element on the player screen can't have.
-  const watching = useRef(new Set<() => void>());
+  // Keyed by Resource, because that is also what keeps one stream per import.
+  const watching = useRef(new Map<string, () => void>());
   useEffect(() => () => watching.current.forEach((stop) => stop()), []);
 
   const refresh = () =>
@@ -32,6 +35,32 @@ export function LibraryScreen() {
     void refresh();
   }, []);
 
+  function watch(id: string): void {
+    watching.current.get(id)?.();
+    const stop = api.watchImport(id, (state) => {
+      setJobs((current) => ({ ...current, [state.resourceId]: state }));
+      if (state.phase === "ready" || state.phase === "failed") void refresh();
+    });
+    watching.current.set(id, stop);
+    // The server answers 404 for a job it no longer holds — a restart mid-import —
+    // and EventSource reports that as silence rather than as anything a caller can
+    // see. A stream that has said nothing by now is therefore how an abandoned
+    // import is recognised, and is what puts its Resume button back.
+    // ponytail: a fixed wait. The alternative is a route that answers whether a job
+    // is live, and one timer beats a whole endpoint until this is wrong for someone.
+    setTimeout(() => setSilent((current) => ({ ...current, [id]: true })), 3000);
+  }
+
+  // A reload forgets every job while the server keeps importing, and the shelf only
+  // records phase changes — never progress. Re-subscribing to whatever is unfinished
+  // is what brings the percentage, the bar and the finished-at-last refetch back.
+  useEffect(() => {
+    for (const resource of resources ?? []) {
+      if (resource.phase === "ready" || resource.phase === "failed") continue;
+      if (!watching.current.has(resource.id)) watch(resource.id);
+    }
+  }, [resources]);
+
   /**
    * Follow a job to its end, then refetch — the shelf is the source of truth, and
    * the job only exists to say what is happening in the meantime.
@@ -39,11 +68,7 @@ export function LibraryScreen() {
   function follow(started: JobState): void {
     setJobs((current) => ({ ...current, [started.resourceId]: started }));
     void refresh();
-    const stop = api.watchImport(started.id, (state) => {
-      setJobs((current) => ({ ...current, [state.resourceId]: state }));
-      if (state.phase === "ready" || state.phase === "failed") void refresh();
-    });
-    watching.current.add(stop);
+    watch(started.id);
   }
 
   async function retry(resource: Resource) {
@@ -56,8 +81,13 @@ export function LibraryScreen() {
   }
 
   async function remove(resource: Resource) {
-    if (!confirm(`Delete “${resource.title}” and its transcript?`)) return;
-    await api.remove(resource.id);
+    setConfirming(null);
+    setError(null);
+    try {
+      await api.remove(resource.id);
+    } catch (failure) {
+      setError(reason(failure));
+    }
     void refresh();
   }
 
@@ -74,12 +104,14 @@ export function LibraryScreen() {
           const phase = jobs[resource.id]?.phase ?? resource.phase;
           const progress = jobs[resource.id]?.progress;
           const reason = jobs[resource.id]?.failureReason ?? resource.failureReason;
-          // A Resource this page is not watching has no job in sight: either it
-          // failed, or a restart abandoned it mid-phase. Both need the same way out,
-          // and the server refuses the retry if one is in fact still running.
+          // A Resource with no job in sight either failed or was abandoned mid-phase
+          // by a restart. Both need the same way out, and the server refuses the
+          // retry if one is in fact still running. An import that has only just been
+          // subscribed to looks the same, though, so it is the stream's silence that
+          // counts here and not the mere absence of a job.
           const watched = jobs[resource.id];
           const stalled =
-            phase !== "ready" && (!watched || watched.phase === "failed" || phase === "failed");
+            phase !== "ready" && (phase === "failed" || (!watched && !!silent[resource.id]));
           return (
             <li key={resource.id} className={phase === "ready" ? "ready" : ""}>
               <a
@@ -101,14 +133,30 @@ export function LibraryScreen() {
                     {reason && `: ${reason}`}
                   </span>
                 )}
+                {/* An import runs for minutes, and a percentage only reads once you
+                    stop to read it. A bar reads while scrolling past. */}
+                {progress !== undefined && phase !== "ready" && (
+                  <progress value={progress} max={1} />
+                )}
               </a>
               {stalled && (
                 <button onClick={() => void retry(resource)}>
                   {phase === "failed" ? "Retry" : "Resume"}
                 </button>
               )}
-              <button className="ghost" onClick={() => void remove(resource)}>
-                Delete
+              {/* Two clicks on one button rather than confirm(): that dialog blocks
+                  the page, cannot be styled to match either theme, and reads as a
+                  browser error. Focus leaving the button disarms it. */}
+              <button
+                className="ghost"
+                onBlur={() => setConfirming(null)}
+                onClick={() =>
+                  confirming === resource.id
+                    ? void remove(resource)
+                    : setConfirming(resource.id)
+                }
+              >
+                {confirming === resource.id ? "Sure?" : "Delete"}
               </button>
             </li>
           );

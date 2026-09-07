@@ -61,13 +61,13 @@ docs/adr/       why things are the way they are
 The web half has one seam of its own, and it is the same idea: `web/api.ts` is the
 only file that knows the server exists. Everything above it deals in model types.
 
-| Module             | What it hides                                                  |
-| ------------------ | -------------------------------------------------------------- |
-| `web/api.ts`       | Every route, status code, `EventSource` and the session cookie |
-| `web/app.tsx`      | The access gate, the hash route, the header                    |
-| `web/library.tsx`  | The shelf, the one paste-a-link box, and live import progress  |
-| `web/player.tsx`   | The lyrics view: rAF-driven sweep, auto-scroll, ask-AI         |
-| `web/settings.tsx` | The two model slots and the language pair                      |
+| Module             | What it hides                                                            |
+| ------------------ | ------------------------------------------------------------------------ |
+| `web/api.ts`       | Every route, status code, `EventSource` and the session cookie           |
+| `web/app.tsx`      | The access gate, the hash route, the header                              |
+| `web/library.tsx`  | The shelf, the one paste-a-link box, and live import progress            |
+| `web/player.tsx`   | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI |
+| `web/settings.tsx` | The two model slots and the language pair                                |
 
 ## Invariants that are easy to break
 
@@ -88,8 +88,12 @@ Every one of these was a real bug caught by a test. If you change the code near 
 - **`<audio>` cannot send headers**, so the gate accepts a cookie as well as a bearer token. (`app.ts`)
 - **The web half keeps no token.** `POST /api/session` sets an httpOnly cookie, and that cookie is what `fetch`, `<audio>` and `EventSource` all carry. Storing a bearer token instead would work for `fetch` and silently break the other two. (`web/api.ts`)
 - **An import's `EventSource` is closed on unmount.** A browser allows only a handful of connections per host; a forgotten stream is one the player's `<audio>` cannot have. (`web/library.tsx`)
+- **The saved position rides on `timeupdate`; only the highlight rides on `requestAnimationFrame`.** A hidden tab suspends rAF entirely while `<audio>` keeps playing — measured, not assumed: 0 frames in 5 seconds with playback advancing normally. So the frame loop stops refreshing `seconds`, and someone who switches tabs, listens on and then closes the page is rewound to wherever they switched away. `timeupdate` keeps firing in a hidden tab, and its four-times-a-second is coarse only for word highlighting, never for a resume point. Reading `audioRef` at save time is not the fix: React detaches the ref before the unmount cleanup runs, which is what the `seconds` ref exists for. (`web/player.tsx`)
 - **Playback is sampled with `requestAnimationFrame`, not `timeupdate`.** `timeupdate` fires about four times a second — visibly late for word-level highlight. The cost is contained by only setting state when `locate` returns a different Line or Word. (`web/player.tsx`)
 - **Tokens are swept by Word, never merged with them.** `tokenWords` matches both back onto `line.text` by character offset, so a Word covering three Tokens lights all three at once. Merging the two arrays instead — the obvious shortcut — silently mis-times every Line whose boundaries disagree, which for Japanese is most of them. (`shared/locate.ts`)
+- **Every colour is one `light-dark()` token, and no rule below the palette names a colour.** A hardcoded hex renders one screen wrong in one theme, for the half of users on the other one, which is the bug nobody reports. Both values sitting on one line is what makes that structurally hard: a token cannot be restyled for light and forgotten for dark. `color-scheme` picks the half that applies and hands the same choice to what CSS does not draw, including the `<audio>` controls. Cost: this needs Chrome 123 / Safari 17.5 / Firefox 120, and on anything older every colour is invalid at once — a loud failure, not a subtle one.
+- **The manual theme override is the `data-theme` attribute, and "auto" is its absence.** `:root[data-theme="light"|"dark"]` sets `color-scheme` outright; removing the attribute puts `prefers-color-scheme` back in charge with no rule of its own. `index.html` applies the stored choice in a blocking script before first paint — React's effect runs after it, and a dark flash on every load is exactly what someone who chose light is trying to avoid. (`app.tsx`, `styles.css`)
+- **A faded Word is faded differently per theme.** On a dark ground a `pending` Word is still a light shape against black; on a light ground the same opacity walks it into the background. `--pending` is the one token that is not a colour, so `light-dark()` cannot hold it and it states both themes the long way.
 - **No TypeScript syntax that emits code.** Node runs these files by stripping types, so parameter properties, enums and namespaces break at runtime. `erasableSyntaxOnly` in tsconfig rejects them at typecheck.
 
 ## Testing conventions
@@ -105,7 +109,7 @@ Every one of these was a real bug caught by a test. If you change the code near 
 
 - **No `LICENSE`.** Needs choosing before this is published anywhere; the README says so too.
 - **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
-- **The lyrics lines are mouse-only.** Each is an `<li onClick>` with no `tabIndex`, role or key handler, so seeking by keyboard is impossible, and there are no playback shortcuts (space to pause, arrows to step a Line). A listening tool wants both.
+- **The ask-AI popup is one shot.** Clicking `?` sends one fixed prompt about one Line and shows one answer; there is no input box, and the server keeps no history, so re-opening it asks the identical question and gets the identical answer. A hard sentence usually takes two or three rounds. Deferred deliberately (2026-09-07) rather than forgotten: it is not a front-end change. `TextModel.complete(prompt: string)` in `ports.ts` takes a single string, so follow-up means giving that seam a message list and changing `POST /api/ask` to match.
 - **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so `POST /api/library/:id/retry` answers 409 and redoing one is delete-and-import.
 - **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate, and accepted: production is unaffected. Add `@vitejs/plugin-react` if it starts to grate.
 - **No DOM tests.** The web half's real logic lives in `shared/locate.ts` — pure, and covered there. The rest is rendering, and testing it would mean adding a DOM and a test framework this project deliberately doesn't have; it is checked by driving the built app in a browser instead.
