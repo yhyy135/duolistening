@@ -125,6 +125,26 @@ export interface ModelSlot {
 }
 
 /**
+ * Where the byte proxy lives (ADR 0009). Addressed like a model slot and for the
+ * same reason: it is a separately deployed thing this half only knows by URL, so
+ * nothing about it is compiled into the page and a reader can point at one they run
+ * themselves.
+ */
+export interface ProxySettings {
+  /** The deployed Worker, e.g. `https://proxy.example.workers.dev/`. */
+  baseUrl: string;
+  /**
+   * The Worker's `PROXY_KEY`, which it wants as `?k=` on every request.
+   *
+   * It is a genuine shared secret *because* it lives here — typed in by each reader
+   * and handed out of band — rather than being a constant compiled into a bundle
+   * anyone who loads the page can read. It is also the proxy's only gate, so an
+   * empty one means whoever finds the URL may use it.
+   */
+  key: string;
+}
+
+/**
  * Holds API keys in the clear. Never hand a Settings object to the browser as-is —
  * the read path masks both apiKey fields; the write path treats a masked value as
  * "leave unchanged".
@@ -139,6 +159,13 @@ export interface Settings {
    * one either, which is what makes a mixed shelf work without editing this first.
    */
   targetLanguage?: LanguageCode;
+  /**
+   * The byte proxy every import fetches through — the one thing a browser cannot do
+   * for itself (ADR 0009). Optional in the same sense a blank model slot is: nothing
+   * can be imported until it is filled in, but a fresh install has not filled in
+   * anything yet.
+   */
+  proxy?: ProxySettings;
 }
 
 /** Every key the Storage seam is asked for, in one place (ADR 0007). */
