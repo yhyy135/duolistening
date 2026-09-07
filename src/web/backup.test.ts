@@ -31,11 +31,27 @@ function resource(over: Partial<Resource> = {}): Resource {
 
 const entry = (over: Partial<Resource> = {}): BackupEntry => ({ resource: resource(over), transcript });
 
+/** Every secret carries a distinctive value, so the sweep below can hunt for them. */
+const SECRETS = ["gsk_text_secret", "gsk_audio_secret", "proxy_shared_secret"];
+
 const settings: Settings = {
-  textModel: { baseUrl: "https://api.groq.com/openai/v1", apiKey: "gsk_real_secret", model: "m" },
-  transcriptionModel: { baseUrl: "https://api.groq.com/openai/v1", apiKey: "gsk_also_secret", model: "w" },
+  textModel: { baseUrl: "https://api.groq.com/openai/v1", apiKey: SECRETS[0]!, model: "m" },
+  transcriptionModel: {
+    baseUrl: "https://api.groq.com/openai/v1",
+    apiKey: SECRETS[1]!,
+    model: "w",
+  },
   nativeLanguage: "zh-CN",
+  proxy: { baseUrl: "https://proxy.example.workers.dev/", key: SECRETS[2]! },
 };
+
+/** Every string anywhere in a value, however deeply nested. */
+function strings(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(strings);
+  if (value && typeof value === "object") return Object.values(value).flatMap(strings);
+  return [];
+}
 
 test("only finished Resources are exported, and the rest are named", () => {
   const { backup, excluded } = buildBackup({
@@ -50,16 +66,32 @@ test("only finished Resources are exported, and the rest are named", () => {
   assert.deepEqual(excluded.map((r) => r.id), ["mid", "broke"]);
 });
 
-test("keys are stripped by default and kept only when asked", () => {
-  const without = buildBackup({ entries: [entry()], settings }).backup;
-  assert.equal(without.settings?.textModel.apiKey, "");
-  assert.equal(without.settings?.transcriptionModel.apiKey, "");
-  // Everything else about the slot survives, so a restore only needs the key retyped.
-  assert.equal(without.settings?.textModel.model, "m");
-  assert.equal(without.settings?.nativeLanguage, "zh-CN");
+test("no secret survives an export, wherever in Settings it lives", () => {
+  // Deliberately a sweep for the values rather than a check of three field names. The
+  // proxy key was added to Settings without forExport learning about it, and naming
+  // fields here would not have caught that; the next one added is caught by this.
+  const { backup } = buildBackup({ entries: [entry()], settings });
+  const written = strings(backup.settings);
 
-  const with_ = buildBackup({ entries: [entry()], settings, includeKeys: true }).backup;
-  assert.equal(with_.settings?.textModel.apiKey, "gsk_real_secret");
+  for (const secret of SECRETS) {
+    assert.equal(written.includes(secret), false, `${secret} was written into the backup`);
+  }
+});
+
+test("everything that is not a secret survives, so a restore only retypes the keys", () => {
+  const { backup } = buildBackup({ entries: [entry()], settings });
+
+  assert.equal(backup.settings?.textModel.model, "m");
+  assert.equal(backup.settings?.textModel.baseUrl, "https://api.groq.com/openai/v1");
+  assert.equal(backup.settings?.proxy?.baseUrl, "https://proxy.example.workers.dev/");
+  assert.equal(backup.settings?.nativeLanguage, "zh-CN");
+});
+
+test("asking twice keeps them", () => {
+  const { backup } = buildBackup({ entries: [entry()], settings, includeKeys: true });
+  const written = strings(backup.settings);
+
+  for (const secret of SECRETS) assert.equal(written.includes(secret), true);
 });
 
 test("no settings asked for, none written", () => {

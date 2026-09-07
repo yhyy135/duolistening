@@ -70,12 +70,22 @@ export function buildBackup(input: BuildInput): { backup: Backup; excluded: Reso
   };
 }
 
+/**
+ * Every secret in Settings, blanked. Add a field here the moment one joins Settings:
+ * the proxy key was missed on its way in, and an export is a plaintext file that ends
+ * up in cloud storage, so a secret that slips through does not slip back.
+ *
+ * `backup.test.ts` looks for the values themselves rather than checking these three
+ * names, so the next one added without a line here fails the suite rather than
+ * shipping.
+ */
 function forExport(settings: Settings, includeKeys: boolean): Settings {
   if (includeKeys) return settings;
   return {
     ...settings,
     textModel: { ...settings.textModel, apiKey: "" },
     transcriptionModel: { ...settings.transcriptionModel, apiKey: "" },
+    ...(settings.proxy && { proxy: { ...settings.proxy, key: "" } }),
   };
 }
 
