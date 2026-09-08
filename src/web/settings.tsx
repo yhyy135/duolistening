@@ -55,6 +55,14 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     keyUrl: "https://platform.openai.com/api-keys",
   },
   {
+    id: "gemini",
+    label: "Google Gemini",
+    // Beta OpenAI compatibility layer: chat and models, no /audio/transcriptions.
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyUrl: "https://aistudio.google.com/apikey",
+    transcription: false,
+  },
+  {
     id: "openrouter",
     label: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -493,7 +501,16 @@ function ProviderHint({
   if (provider.id === "ollama") return <p className="hint">{t("settings.ollamaHint")}</p>;
   return (
     <>
-      {provider.id === "cloudflare" && <p className="hint">{t("settings.cloudflareHint")}</p>}
+      {provider.id === "cloudflare" && (
+        <p className="hint">
+          {t("settings.cloudflareHint", {
+            model:
+              field === "transcriptionModel"
+                ? "@cf/openai/whisper-large-v3-turbo"
+                : "@cf/meta/llama-3.1-8b-instruct",
+          })}
+        </p>
+      )}
       {provider.id === "groq" && field === "transcriptionModel" && (
         <p className="hint">{t("settings.groqHint")}</p>
       )}

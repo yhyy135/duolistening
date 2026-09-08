@@ -96,7 +96,7 @@ const en = {
   "settings.provider": "Provider",
   "settings.providerCustom": "Custom",
   "settings.cloudflareHint":
-    "Cloudflare Workers AI speaks the OpenAI shape too: replace ACCOUNT_ID in the base URL with yours, and use a model like @cf/meta/llama-3.1-8b-instruct.",
+    "Cloudflare Workers AI speaks the OpenAI shape too: replace ACCOUNT_ID in the base URL with yours, and use a model like {model}.",
   "settings.groqHint": "Groq runs Whisper for free — try model whisper-large-v3-turbo.",
   "settings.getApiKey":
     "Create an API key at {host} and paste it below, then click “{action}” to pick one.",
@@ -205,7 +205,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "服务商",
     "settings.providerCustom": "自定义",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI 也兼容 OpenAI 格式：把 base URL 里的 ACCOUNT_ID 换成你自己的账号 ID，模型名可以用 @cf/meta/llama-3.1-8b-instruct 之类。",
+      "Cloudflare Workers AI 也兼容 OpenAI 格式：把 base URL 里的 ACCOUNT_ID 换成你自己的账号 ID，模型名可以用 {model} 之类。",
     "settings.groqHint": "Groq 免费提供 Whisper，推荐使用 whisper-large-v3-turbo 模型。",
     "settings.getApiKey":
       "在 {host} 创建 API Key 并填入下方，然后点击「{action}」选择模型即可。",
@@ -308,7 +308,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "服務商",
     "settings.providerCustom": "自訂",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI 也相容 OpenAI 格式：把 base URL 裡的 ACCOUNT_ID 換成你自己的帳號 ID，模型名可以用 @cf/meta/llama-3.1-8b-instruct 之類。",
+      "Cloudflare Workers AI 也相容 OpenAI 格式：把 base URL 裡的 ACCOUNT_ID 換成你自己的帳號 ID，模型名可以用 {model} 之類。",
     "settings.groqHint": "Groq 免費提供 Whisper，推薦使用 whisper-large-v3-turbo 模型。",
     "settings.getApiKey":
       "在 {host} 建立 API Key 並貼到下方，然後點擊「{action}」選擇模型即可。",
@@ -413,7 +413,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "プロバイダー",
     "settings.providerCustom": "カスタム",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI も OpenAI 形式で話せます：base URL の ACCOUNT_ID を自分のアカウント ID に置き換え、モデルは @cf/meta/llama-3.1-8b-instruct のようなものを使ってください。",
+      "Cloudflare Workers AI も OpenAI 形式で話せます：base URL の ACCOUNT_ID を自分のアカウント ID に置き換え、モデルは {model} のようなものを使ってください。",
     "settings.groqHint":
       "Groq なら Whisper を無料で使えます。おすすめモデルは whisper-large-v3-turbo です。",
     "settings.getApiKey":
@@ -519,7 +519,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "제공업체",
     "settings.providerCustom": "사용자 지정",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI도 OpenAI 형식을 지원합니다: base URL의 ACCOUNT_ID를 본인 계정 ID로 바꾸고, 모델은 @cf/meta/llama-3.1-8b-instruct 같은 것을 사용하세요.",
+      "Cloudflare Workers AI도 OpenAI 형식을 지원합니다: base URL의 ACCOUNT_ID를 본인 계정 ID로 바꾸고, 모델은 {model} 같은 것을 사용하세요.",
     "settings.groqHint":
       "Groq는 Whisper를 무료로 제공합니다. 추천 모델은 whisper-large-v3-turbo입니다.",
     "settings.getApiKey":
@@ -626,7 +626,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "Proveedor",
     "settings.providerCustom": "Personalizado",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI también habla el formato de OpenAI: cambia ACCOUNT_ID en la URL base por el tuyo, y usa un modelo como @cf/meta/llama-3.1-8b-instruct.",
+      "Cloudflare Workers AI también habla el formato de OpenAI: cambia ACCOUNT_ID en la URL base por el tuyo, y usa un modelo como {model}.",
     "settings.groqHint":
       "Groq ofrece Whisper gratis — prueba el modelo whisper-large-v3-turbo.",
     "settings.getApiKey":
@@ -733,7 +733,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "Fournisseur",
     "settings.providerCustom": "Personnalisé",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI parle aussi le format OpenAI : remplacez ACCOUNT_ID dans l'URL de base par le vôtre, et utilisez un modèle comme @cf/meta/llama-3.1-8b-instruct.",
+      "Cloudflare Workers AI parle aussi le format OpenAI : remplacez ACCOUNT_ID dans l'URL de base par le vôtre, et utilisez un modèle comme {model}.",
     "settings.groqHint":
       "Groq propose Whisper gratuitement — essayez le modèle whisper-large-v3-turbo.",
     "settings.getApiKey":
@@ -840,7 +840,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.provider": "Anbieter",
     "settings.providerCustom": "Benutzerdefiniert",
     "settings.cloudflareHint":
-      "Cloudflare Workers AI spricht ebenfalls das OpenAI-Format: ersetze ACCOUNT_ID in der Basis-URL durch deine eigene, und nutze ein Modell wie @cf/meta/llama-3.1-8b-instruct.",
+      "Cloudflare Workers AI spricht ebenfalls das OpenAI-Format: ersetze ACCOUNT_ID in der Basis-URL durch deine eigene, und nutze ein Modell wie {model}.",
     "settings.groqHint":
       "Groq bietet Whisper kostenlos — probier das Modell whisper-large-v3-turbo.",
     "settings.getApiKey":
