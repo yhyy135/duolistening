@@ -2,9 +2,25 @@
 // that is the only thing standing between a Transcript and an evicted browser.
 
 import { useEffect, useRef, useState } from "react";
-import type { Episode, ImportPhase, Resource, Settings } from "../shared/model.ts";
+import {
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  type Episode,
+  type ImportPhase,
+  type LanguageCode,
+  type Resource,
+  type Settings,
+} from "../shared/model.ts";
 import { backupFilename, buildBackup, parseBackup, planImport } from "./backup.ts";
+import { Icon } from "./icons.tsx";
 import { useT } from "./i18n.ts";
+import {
+  LANGUAGE_LEARNING_GENRE,
+  MARKETS,
+  recommendedFor,
+  searchPodcasts,
+  type PodcastSuggestion,
+} from "./itunes.ts";
 import { startImport, retryImport, type ImportProgress } from "./import.ts";
 import { buildImportDeps } from "./pipeline.ts";
 import { createPodcastFeed } from "./podcast-feed.ts";
@@ -13,6 +29,14 @@ import { allEntries, listResources, readSettings, remove as removeResource } fro
 
 /** The phase names double as i18n keys, so there is no second list to keep in step. */
 const phaseKey = (phase: ImportPhase) => `phase.${phase}` as const;
+
+/**
+ * How many episodes of a feed to show at once. A weekly show that has been running
+ * five years answers with several hundred, and rendering all of them buries the shelf
+ * under a list nobody scrolled to. The feed is parsed once and held whole — this is a
+ * display cap, not a second request, so "show more" costs nothing.
+ */
+const PAGE = 10;
 
 /** mm:ss, or h:mm:ss past the hour — podcast episodes routinely run longer. */
 const formatTime = (seconds: number) =>
@@ -27,6 +51,8 @@ export function LibraryScreen() {
   const [running, setRunning] = useState<Record<string, ImportProgress>>({});
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  /** A feed the recommendations sent over, for the box below to open. */
+  const [handed, setHanded] = useState("");
   const t = useT();
 
   // Which imports this tab is actually driving. An import lives in the page now
@@ -91,6 +117,8 @@ export function LibraryScreen() {
     <main>
       <ImportBox
         settings={settings}
+        handed={handed}
+        onHandled={() => setHanded("")}
         onStart={(id, begin) => {
           void drive(id, async (report) => {
             await begin(report);
@@ -114,10 +142,13 @@ export function LibraryScreen() {
           // it. Both need the same way out.
           const stalled =
             phase !== "ready" && (phase === "failed" || !driving.current.has(resource.id));
-          // `annotating` is not a phase any import enters any more — translation
-          // happens in the player now (ADR 0011) — but a Resource left in it by the
-          // old pipeline still has its Lines and is still worth opening.
-          const playable = phase === "ready" || phase === "annotating";
+          // Stored audio is the real answer, whatever the phase says: an import that
+          // downloaded an episode and then failed to transcribe it left something that
+          // plays, and refusing to open it would be withholding bytes we already have.
+          // The two phases beside it are for Resources with no `hasAudio` — `ready`
+          // from before the field existed or restored from a backup, and `annotating`
+          // from the old pipeline, which no import enters any more (ADR 0011).
+          const playable = resource.hasAudio || phase === "ready" || phase === "annotating";
           return (
             <li key={resource.id} className={playable ? "ready" : ""}>
               <a href={playable ? `#/r/${encodeURIComponent(resource.id)}` : undefined}>
@@ -167,8 +198,162 @@ export function LibraryScreen() {
           );
         })}
       </ul>
+
+      {/* Under the shelf, not above it. A reader with episodes came back for those;
+          a reader without any has an empty shelf and this is what fills the screen. */}
+      <Recommended settings={settings} onPick={setHanded} />
     </main>
   );
+}
+
+/** Remembered so the day's one request can happen without asking again every visit. */
+const DISCOVER_KEY = "duolistening.discover";
+
+/**
+ * The day's recommendations.
+ *
+ * Apple's top-charts feed sends no CORS headers and cannot be read from a page at
+ * all, so "what is popular" is approximated by what a storefront answers for that
+ * language's own search terms — which for someone studying the language is the better
+ * list anyway, and it arrives with the `feedUrl` an import needs. `itunes.ts` owns the
+ * queries and the once-a-day cache; this only decides which language to ask about.
+ *
+ * The network is touched exactly twice a day per language, and once more each time
+ * the reader types a search. Nothing else here reaches out.
+ */
+function Recommended({
+  settings,
+  onPick,
+}: {
+  settings: Settings | null;
+  onPick: (feedUrl: string) => void;
+}) {
+  const t = useT();
+  const [language, setLanguage] = useState<LanguageCode | null>(null);
+  const [items, setItems] = useState<PodcastSuggestion[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [term, setTerm] = useState("");
+
+  // What the reader said they are studying, else whichever language they last asked
+  // about here. Both unset is the honest case rather than a default: the studied
+  // language is optional by design, and guessing one would recommend Spanish to
+  // somebody learning Korean. The chips below are then the only way in.
+  useEffect(() => {
+    setLanguage((chosen) => chosen ?? settings?.targetLanguage ?? stored());
+  }, [settings]);
+
+  useEffect(() => {
+    if (!language) return;
+    setBusy(true);
+    setFailed(false);
+    recommendedFor(language)
+      .then(setItems, () => setFailed(true))
+      .finally(() => setBusy(false));
+  }, [language]);
+
+  function choose(code: LanguageCode) {
+    setItems(null);
+    setTerm("");
+    setLanguage(code);
+    try {
+      localStorage.setItem(DISCOVER_KEY, code);
+    } catch {
+      // Private mode. The chip still works for this visit, which is all it owes.
+    }
+  }
+
+  async function search(event: React.FormEvent) {
+    event.preventDefault();
+    const wanted = term.trim();
+    if (!wanted || !language) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      // Deliberately past the cache: a search is the reader asking for something the
+      // day's list did not have.
+      setItems(await searchPodcasts({ term: wanted, country: MARKETS[language].country }));
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="discover">
+      <h2>
+        <Icon name="compass" />
+        {t("discover.title")}
+      </h2>
+      <p className="hint">{t("discover.subtitle")}</p>
+
+      <div className="chips">
+        {LANGUAGES.map((code) => (
+          <button
+            key={code}
+            type="button"
+            className={code === language ? "on" : ""}
+            aria-pressed={code === language}
+            onClick={() => choose(code)}
+          >
+            {LANGUAGE_NAMES[code]}
+          </button>
+        ))}
+      </div>
+
+      {language && (
+        <form onSubmit={(event) => void search(event)}>
+          <input
+            value={term}
+            placeholder={t("discover.searchPlaceholder")}
+            onChange={(event) => setTerm(event.target.value)}
+          />
+          <button disabled={busy}>{t("discover.search")}</button>
+        </form>
+      )}
+
+      {!language && <p className="notice">{t("discover.pickLanguage")}</p>}
+      {busy && <p className="notice">{t("discover.loading")}</p>}
+      {failed && <p className="error">{t("discover.failed")}</p>}
+      {items?.length === 0 && !busy && <p className="notice">{t("discover.empty")}</p>}
+
+      <ul className="suggestions">
+        {items?.map((suggestion) => (
+          <li key={suggestion.collectionId}>
+            <button type="button" onClick={() => onPick(suggestion.feedUrl)}>
+              {/* Straight from Apple's CDN, which needs no proxy for an <img> and no
+                  key. The cost is one outbound request per card and a blank square
+                  offline, which is why nothing but the artwork depends on it. */}
+              <img src={suggestion.artworkUrl} alt="" loading="lazy" width="56" height="56" />
+              <span className="who">
+                <span className="title">{suggestion.title}</span>
+                {/* Beside the author rather than out at the right margin: a pill on
+                    its own column costs a third of a phone's width, and the title it
+                    took that width from is what the reader is actually reading. */}
+                <span className="meta">
+                  <span className="author">{suggestion.author}</span>
+                  {suggestion.genreIds.includes(LANGUAGE_LEARNING_GENRE) && (
+                    <span className="badge">{t("discover.languageLearning")}</span>
+                  )}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function stored(): LanguageCode | null {
+  try {
+    const code = localStorage.getItem(DISCOVER_KEY);
+    // Anything else is a language this build no longer offers, or someone else's key.
+    return LANGUAGES.includes(code as LanguageCode) ? (code as LanguageCode) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -228,9 +413,11 @@ function Backup({
   return (
     <section className="backup">
       <button type="button" className="ghost" onClick={() => void save()}>
+        <Icon name="download" />
         {t("library.exportBackup")}
       </button>
       <button type="button" className="ghost" onClick={() => file.current?.click()}>
+        <Icon name="upload" />
         {t("library.importBackup")}
       </button>
       <input
@@ -256,10 +443,15 @@ function Backup({
  */
 function ImportBox({
   settings,
+  handed,
+  onHandled,
   onStart,
   onError,
 }: {
   settings: Settings | null;
+  /** A feed URL the recommendations below sent up, or "" for nothing pending. */
+  handed: string;
+  onHandled: () => void;
   onStart: (
     id: string,
     begin: (report: (p: ImportProgress) => void) => Promise<unknown>,
@@ -269,7 +461,24 @@ function ImportBox({
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [feed, setFeed] = useState<{ feedTitle: string; episodes: Episode[] } | null>(null);
+  /** How much of the parsed feed is on screen. Reset with every feed, or the second
+      show opens already scrolled past its own first ten episodes. */
+  const [shown, setShown] = useState(PAGE);
+  const box = useRef<HTMLElement>(null);
   const t = useT();
+
+  // A recommendation, opened in the one episode picker this screen has rather than a
+  // second one beside it. Cleared as soon as it is taken, so picking the same show
+  // again after importing from it is not a dead click. The scroll is not decoration:
+  // the card was tapped at the bottom of the page and the episodes appear at the top.
+  useEffect(() => {
+    if (!handed) return;
+    setUrl(handed);
+    void listEpisodes(handed).then(() =>
+      box.current?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
+    onHandled();
+  }, [handed]);
 
   async function listEpisodes(feedUrl: string) {
     if (!settings) return onError(t("library.needsSettings"));
@@ -280,6 +489,7 @@ function ImportBox({
         proxyUrl: (target) => proxyUrl(settings.proxy, target),
       });
       setFeed(await podcast.listEpisodes(feedUrl));
+      setShown(PAGE);
     } catch (failure) {
       onError(reason(failure));
     } finally {
@@ -288,7 +498,7 @@ function ImportBox({
   }
 
   return (
-    <section className="import">
+    <section className="import" ref={box}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -308,7 +518,7 @@ function ImportBox({
         <div className="episodes">
           <h2>{feed.feedTitle}</h2>
           <ul>
-            {feed.episodes.map((episode) => (
+            {feed.episodes.slice(0, shown).map((episode) => (
               <li key={episode.audioUrl}>
                 <button
                   disabled={busy || !settings}
@@ -349,6 +559,13 @@ function ImportBox({
               </li>
             ))}
           </ul>
+          {shown < feed.episodes.length && (
+            <button type="button" className="more" onClick={() => setShown(shown + PAGE)}>
+              {t("library.showMore", {
+                count: Math.min(PAGE, feed.episodes.length - shown),
+              })}
+            </button>
+          )}
         </div>
       )}
     </section>

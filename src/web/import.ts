@@ -33,7 +33,14 @@ export interface ImportDeps {
    * mismatch this ordering was changed to fix; slicing the Blob locally would settle
    * it too, and is deliberately left for later.
    */
-  transcribe(
+  /**
+   * Absent when no Transcription Model is configured, and that is a supported way to
+   * import rather than an oversight. Downloading an episode needs the proxy; turning
+   * it into Lines needs somebody's API key, and the two are separate decisions. With
+   * this missing the import keeps the audio and stops at `untranscribed`, which a
+   * later Resume picks up — by then the download is already paid for.
+   */
+  transcribe?(
     episodeUrl: string,
     audio: Blob,
     onProgress: (fraction: number) => void,
@@ -139,10 +146,25 @@ async function run(
       // everything after this point can fail without losing it.
       await deps.store.save({ resource: current, audio });
     }
+    // Recorded on the Resource, not inferred from the phase later: everything below
+    // here can fail, and the shelf still has to know this episode plays. Set on the
+    // resume path too, so a Resource from before this field heals when it is retried.
+    current = { ...current, hasAudio: true };
 
     if (!transcript) {
+      const makeTranscript = deps.transcribe;
+      if (!makeTranscript) {
+        // The audio is stored and the episode plays; there is simply no model to make
+        // Lines with. Stopping here rather than throwing is what keeps "listen now,
+        // transcribe later" off the shelf as a failed import — and this phase is what
+        // a Resume aims at once a model is filled in.
+        await advance("untranscribed");
+        onProgress({ phase: "untranscribed", progress: 1 });
+        return current;
+      }
+
       await advance("transcribing");
-      transcript = await deps.transcribe(episodeUrl, audio, (progress) =>
+      transcript = await makeTranscript(episodeUrl, audio, (progress) =>
         onProgress({ phase: "transcribing", progress }),
       );
       // Saved bare, before the shelf is told the import finished. Transcription is

@@ -1,4 +1,4 @@
-import type { Settings } from "../shared/model.ts";
+import { slotConfigured, type Settings } from "../shared/model.ts";
 import { createAnnotator } from "./annotate.ts";
 import type { ImportDeps } from "./import.ts";
 import { createJapaneseTokenizerOnce } from "./japanese.ts";
@@ -52,17 +52,23 @@ export function buildImportDeps(settings: Settings): ImportDeps {
     newId: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),
 
-    transcribe: (episodeUrl, audio, onProgress) =>
-      transcribe({
-        audio,
-        transcribeBlob: (blob) => speech.transcribeBlob(blob, settings.targetLanguage),
-        // Only reached for an episode over the request limit, which is still chunked
-        // by asking the proxy for ranges. `sliceUrls` wants a total; the Blob's own
-        // size is the honest one, since it describes the bytes that were kept.
-        sliceUrl: sliceUrls(settings.proxy, episodeUrl, audio.size),
-        transcribeUrl: (url) => speech.transcribeUrl(url, settings.targetLanguage),
-        onProgress,
-      }),
+    // Omitted entirely when the slot is empty, rather than handed over to fail on the
+    // first call. The import reads its absence as "keep the audio and stop", which is
+    // how an episode can be downloaded and listened to before anybody has an API key
+    // — the proxy is what a download needs, and that is a different setting.
+    ...(slotConfigured(settings.transcriptionModel) && {
+      transcribe: (episodeUrl: string, audio: Blob, onProgress: (n: number) => void) =>
+        transcribe({
+          audio,
+          transcribeBlob: (blob) => speech.transcribeBlob(blob, settings.targetLanguage),
+          // Only reached for an episode over the request limit, which is still chunked
+          // by asking the proxy for ranges. `sliceUrls` wants a total; the Blob's own
+          // size is the honest one, since it describes the bytes that were kept.
+          sliceUrl: sliceUrls(settings.proxy, episodeUrl, audio.size),
+          transcribeUrl: (url) => speech.transcribeUrl(url, settings.targetLanguage),
+          onProgress,
+        }),
+    }),
 
     /**
      * The audio itself, for playback. Through the proxy like everything else, so the

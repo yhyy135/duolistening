@@ -13,15 +13,22 @@ each paying for their own transcription with their own keys.
 
 ## What you need
 
-- **An OpenAI-compatible chat endpoint and an OpenAI-compatible transcription
-  endpoint.** They can be the same provider or two different ones. See below.
 - **A byte proxy** — a small Cloudflare Worker, included in `worker/`. It exists
   because a browser genuinely cannot do three things for itself: follow the redirect
   a podcast host answers with, reach a host that sends no CORS headers, and hand a
   transcription endpoint a slice of a large file. It stores nothing.
+- **An OpenAI-compatible transcription endpoint**, for the transcript, and **an
+  OpenAI-compatible chat endpoint**, for the translation under each line and the
+  ask-AI popup. They can be the same provider or two different ones. See below.
 - **Node 22.18 or newer**, but only to build. There is nothing to run afterwards.
 
 No ffmpeg, no yt-dlp, no Docker, no database.
+
+Only the first of those is needed to start. Import an episode with just the proxy
+filled in and you get the audio and a player: it plays, and where the lyrics would be
+it says there is no transcript yet and points at Settings. Fill in a transcription
+model whenever you like and the same panel turns into a **Retry transcription** button
+— the episode is already downloaded, so that step is never paid for twice.
 
 ## Running it
 
@@ -58,6 +65,16 @@ wrangler deploy
 secret rather than a public constant precisely because it lives in each reader's
 settings instead of in the page everyone downloads. Cloudflare's own rate limiting is
 the backstop against someone who obtains it; there is no code here that can be.
+
+**Tell your readers to add it to the home screen.** They get an icon, a window with no
+browser chrome, and a page that still opens with no network — what it plays is already
+in their browser. The real reason is quieter, and it is about iOS: WebKit deletes a
+site's storage after seven days of Safari use without interaction, and a web app on the
+home screen is exempt on its own first-party domain. That is the difference between a
+shelf of transcripts somebody paid to make and an empty one. The honest cost, worth
+finding out before relying on it: standalone web apps on iOS have a long history of
+losing audio when minimised or when the screen locks, so play an episode, lock the
+phone, and see what your build does.
 
 ## Pointing it at models
 

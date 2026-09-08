@@ -9,7 +9,7 @@
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "assets": "node scripts/make-probe.ts",
+    "assets": "node scripts/make-probe.ts && node scripts/make-icons.ts",
     "prebuild": "npm run assets",
     "build": "vite build",
     "predev:web": "npm run assets",

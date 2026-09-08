@@ -20,7 +20,8 @@ import {
   type SettingsCheck,
   type SlotCheck,
 } from "../shared/model.ts";
-import { useT } from "./i18n.ts";
+import { Icon } from "./icons.tsx";
+import { rememberLocale, useT } from "./i18n.ts";
 import { checkSettings } from "./model-check.ts";
 import { checkProxy, type ProxyCheck } from "./proxy.ts";
 import { readSettings, writeSettings } from "./store.ts";
@@ -59,6 +60,8 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   const [fetchingModels, setFetchingModels] = useState<SlotField | null>(null);
   const [modelOptions, setModelOptions] = useState<Partial<Record<SlotField, string[]>>>({});
   const [modelsStatus, setModelsStatus] = useState<Partial<Record<SlotField, SlotCheck>>>({});
+  /** Back, armed: the next click on it leaves without saving. */
+  const [discarding, setDiscarding] = useState(false);
   // What is actually stored, so Back can tell a real edit from a screen nobody touched.
   const savedRef = useRef<Settings | null>(null);
   const t = useT();
@@ -83,11 +86,22 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
     setProxyCheck(null);
     setStatus(null);
     setModelsStatus({});
+    // An armed Back is about the edits that existed when it was armed.
+    setDiscarding(false);
   };
 
+  /**
+   * Two clicks on one button, the way the shelf's Delete does it, and for a reason the
+   * shelf only half stated: `confirm()` does not merely read as a browser error, it can
+   * silently answer `false`. A viewer that blocks modals — a sandboxed frame, or Chrome
+   * once a reader has ticked "prevent this page from creating additional dialogs" —
+   * returns that without showing anything, and this button then did nothing at all,
+   * forever, with no way to find out why. Changing the Native Language is enough to
+   * make the form dirty, so that was most of the ways out of this screen.
+   */
   const goBack = () => {
     const dirty = JSON.stringify(settings) !== JSON.stringify(savedRef.current);
-    if (dirty && !confirm(t("settings.discard"))) return;
+    if (dirty && !discarding) return setDiscarding(true);
     // The interface followed the unsaved Native Language; discarding puts it back.
     if (savedRef.current) onLocale(savedRef.current.nativeLanguage);
     history.back();
@@ -139,8 +153,16 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
 
   return (
     <main className="settings">
-      <button type="button" className="back" onClick={goBack}>
-        {t("common.back")}
+      {/* Focus leaving disarms it, so a Back armed and then ignored is not a trap
+          waiting for the next person who reaches for it. */}
+      <button
+        type="button"
+        className={discarding ? "back armed" : "back"}
+        onClick={goBack}
+        onBlur={() => setDiscarding(false)}
+      >
+        <Icon name="arrow-left" />
+        {discarding ? t("settings.discard") : t("common.back")}
       </button>
       <form
         onSubmit={async (event) => {
@@ -149,6 +171,11 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           try {
             await writeSettings(settings);
             savedRef.current = settings;
+            // Only now, and only here. The interface has been following this dropdown
+            // since it changed, but until this line nothing was stored, and a cache
+            // written from the preview is what left readers with an interface in one
+            // language and this screen showing another.
+            rememberLocale(settings.nativeLanguage);
             setStatus(t("common.saved"));
           } catch (failure) {
             setStatus(reason(failure));

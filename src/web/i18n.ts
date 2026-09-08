@@ -4,14 +4,49 @@
 
 import { createContext, useCallback, useContext } from "react";
 import { t, type StringKey } from "../shared/i18n.ts";
-import type { LanguageCode } from "../shared/model.ts";
+import { LANGUAGES, type LanguageCode } from "../shared/model.ts";
 
 /**
  * Cached so the very first paint is already in the right language. Settings live in
  * IndexedDB, which cannot be read before a render, and a shell that flashed English
  * on every load is what someone who set their language is trying to avoid.
  */
-export const LOCALE_KEY = "duolistening.locale";
+const LOCALE_KEY = "duolistening.locale";
+
+/**
+ * The cache mirrors the **stored** Native Language, never the one a screen is showing.
+ *
+ * Those are not the same thing, and the difference was a real bug. The Settings screen
+ * switches the interface the moment its dropdown changes, so you can see what you are
+ * choosing — but nothing is saved until Save. When the cache was written from that
+ * live preview, a reader who picked a language and then left without saving got an
+ * interface in one language and a Settings screen showing another, permanently: the
+ * Back button's restore only runs if you press Back, and the read below could not
+ * correct a browser that had never saved any settings at all.
+ *
+ * So there are exactly two writers, both of them facts about the store rather than
+ * the screen: a successful save, and the read at boot — which also clears the cache
+ * when there is nothing stored, because a mirror of nothing is nothing.
+ */
+export function rememberLocale(code: LanguageCode | null): void {
+  try {
+    if (code) localStorage.setItem(LOCALE_KEY, code);
+    else localStorage.removeItem(LOCALE_KEY);
+  } catch {
+    // Private mode. The interface still follows the setting for this visit; only the
+    // head start on the next first paint is lost.
+  }
+}
+
+/** What the last save left here, if it is still a language this build offers. */
+export function cachedLocale(): LanguageCode | null {
+  try {
+    const code = localStorage.getItem(LOCALE_KEY);
+    return LANGUAGES.includes(code as LanguageCode) ? (code as LanguageCode) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const LocaleContext = createContext<LanguageCode>("en");
 

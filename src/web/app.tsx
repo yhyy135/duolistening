@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from "react";
 import type { LanguageCode } from "../shared/model.ts";
-import { LOCALE_KEY, LocaleContext, useT } from "./i18n.ts";
+import { Icon, type IconName } from "./icons.tsx";
+import { LocaleContext, cachedLocale, rememberLocale, useT } from "./i18n.ts";
 import { LibraryScreen } from "./library.tsx";
 import { PlayerScreen } from "./player.tsx";
 import { SettingsScreen } from "./settings.tsx";
@@ -23,6 +24,11 @@ import { readSettings } from "./store.ts";
 const THEMES = ["auto", "light", "dark"] as const;
 type Theme = (typeof THEMES)[number];
 const THEME_KEY = "duolistening.theme";
+const THEME_ICONS: Record<Theme, IconName> = {
+  auto: "display",
+  light: "sun",
+  dark: "moon",
+};
 
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -61,19 +67,26 @@ function useHash(): string {
  * what someone who set their language is trying to avoid.
  */
 function useLocale(): [LanguageCode, (code: LanguageCode) => void] {
-  const [locale, setLocale] = useState<LanguageCode>(
-    () => (localStorage.getItem(LOCALE_KEY) as LanguageCode | null) ?? "en",
-  );
+  const [locale, setLocale] = useState<LanguageCode>(() => cachedLocale() ?? "en");
 
+  // The store is the authority and this is where it says so: the language it holds
+  // wins over the cache, and a store with no settings in it puts the interface back to
+  // English and empties the cache with it. Without that second half, a browser that
+  // once previewed a language in Settings and never saved would keep answering in it
+  // for good — see the note on rememberLocale.
   useEffect(() => {
     readSettings().then(
-      (settings) => settings && setLocale(settings.nativeLanguage),
+      (settings) => {
+        setLocale(settings?.nativeLanguage ?? "en");
+        rememberLocale(settings?.nativeLanguage ?? null);
+      },
       () => undefined,
     );
   }, []);
 
+  // Deliberately not writing the cache: `setLocale` is also how the Settings screen
+  // previews an unsaved choice, and caching that is precisely the bug above.
   useEffect(() => {
-    localStorage.setItem(LOCALE_KEY, locale);
     document.documentElement.lang = locale;
   }, [locale]);
 
@@ -106,13 +119,21 @@ function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
         <a href="#/" className="brand">
           duolistening
         </a>
-        <a href="#/settings">{t("nav.settings")}</a>
+        <a href="#/settings" aria-label={t("nav.settings")} title={t("nav.settings")}>
+          <Icon name="gear" />
+        </a>
+        {/* The label the text used to carry is now the accessible name, and it still
+            says which of the three modes is in force rather than which one the click
+            would move to — a control that announces its own state. "Auto" gets the
+            screen it defers to, because there is no glyph for "whatever you set your
+            system to" and a half-lit sun would read as a third theme. */}
         <button
           className="theme"
           onClick={cycleTheme}
+          aria-label={themeLabel[theme]}
           title={`${themeLabel.auto} / ${themeLabel.light} / ${themeLabel.dark}`}
         >
-          {themeLabel[theme]}
+          <Icon name={THEME_ICONS[theme]} />
         </button>
       </header>
       {resourceId ? (

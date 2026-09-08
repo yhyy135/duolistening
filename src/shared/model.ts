@@ -94,8 +94,14 @@ export interface Line {
 /** Ordered, gap-tolerant, covers the Resource's full duration. */
 export type Transcript = Line[];
 
+/**
+ * `untranscribed` is a finished import that has audio and no Transcript, which is
+ * what an import does when no Transcription Model is configured. It is a resting
+ * state rather than a failure — the episode plays — but not `ready` either, because
+ * there is work left that a Resume can still do once a model is filled in.
+ */
 export type ImportPhase =
-  "queued" | "fetching" | "transcribing" | "annotating" | "ready" | "failed";
+  "queued" | "fetching" | "transcribing" | "annotating" | "untranscribed" | "ready" | "failed";
 
 export interface Resource {
   id: ResourceId;
@@ -113,6 +119,16 @@ export interface Resource {
   /** ISO 8601. */
   importedAt: string;
   phase: ImportPhase;
+  /**
+   * Whether the audio for this Resource is in the store. The phase cannot answer that
+   * on its own: `failed` says an import stopped, not where — and one that downloaded
+   * an episode and then could not transcribe it leaves behind something that plays
+   * perfectly. Without this the shelf refuses to open it, over bytes it already has.
+   *
+   * Absent on a Resource imported before this existed, and on one restored from a
+   * backup, since a backup carries Transcripts and not audio.
+   */
+  hasAudio?: boolean;
   failureReason?: string;
   /** Where playback stopped last time, so the Library can drop the user back in. */
   lastPositionSec?: number;
@@ -122,6 +138,21 @@ export interface ModelSlot {
   baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+/**
+ * Whether a slot has enough in it to call. The key is deliberately not part of the
+ * answer: a model served from the reader's own machine wants no key, and demanding
+ * one here would refuse to talk to it.
+ *
+ * Asked before building a client rather than after one fails, because the two slots
+ * are optional in different ways now — an import with no Transcription Model stores
+ * the audio and stops (see `ImportPhase`), and a player with no Text Model shows the
+ * Lines without translating them. Both are quiet, and neither should be a failed
+ * request to a base URL that is the empty string.
+ */
+export function slotConfigured(slot: ModelSlot | undefined): boolean {
+  return Boolean(slot?.baseUrl.trim() && slot.model.trim());
 }
 
 /**

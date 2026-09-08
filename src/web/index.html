@@ -4,6 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>duolistening</title>
+
+    <!-- The dark one comes first on purpose. The browser takes the first theme-color
+         whose media matches, and a theme-color with no media matches everything — so
+         in the other order the dark one is unreachable and every phone gets a pale
+         status bar over a dark app. Both values are --bg from styles.css. -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12141a" />
+    <meta name="theme-color" content="#f4f5f8" />
+
+    <!-- Absolute here, relative inside the manifest, and both halves are deliberate.
+         Vite rewrites a leading-slash href in this file through `base`, the same way
+         it rewrites /assets/*, so a reader who builds with --base=/somewhere/ gets a
+         page that works. The manifest cannot be rewritten by anyone — it is a public
+         file copied verbatim — so start_url, scope and every icon in it are relative
+         to the manifest's own URL, which is right wherever the bundle is unpacked. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <script>
       // Before first paint, because React's effect runs after it: a dark flash on
       // every load is precisely what someone who chose light mode is trying to
@@ -18,5 +36,19 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/main.tsx"></script>
+    <script type="module">
+      // Vite folds this block into the bundle, which is what makes import.meta.env
+      // real here. PROD keeps the worker off the dev server, where one holding a
+      // stale copy of a module Vite has just rebuilt is a debugging session nobody
+      // asked for; BASE_URL puts it at the app root, which is also its scope.
+      //
+      // Registration rejects outright over plain http, and in some privacy modes.
+      // Nothing in the app depends on the worker, so the failure is swallowed rather
+      // than logged at a reader who cannot act on it.
+      if (import.meta.env.PROD && "serviceWorker" in navigator)
+        addEventListener("load", () => {
+          navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => {});
+        });
+    </script>
   </body>
 </html>

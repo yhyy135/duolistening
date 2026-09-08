@@ -209,7 +209,9 @@ export async function transcribe(deps: TranscribeDeps): Promise<Transcript> {
   if (fitsWhole(totalBytes, limit)) {
     const whole = await deps.transcribeBlob(deps.audio);
     deps.onProgress?.(1);
-    return stitch([{ chunk: { startByte: 0, endByte: totalBytes - 1, startSec: 0 }, ...whole }]);
+    return stitch([
+      { chunk: { startByte: 0, endByte: totalBytes - 1, startSec: 0 }, ...whole },
+    ]);
   }
 
   const results: ChunkResult[] = [];
