@@ -1,0 +1,16 @@
+# The page. The proxy is a separate deployment with its own config in worker/ — the
+# two know nothing about each other, and a reader joins them from the Settings screen
+# (ADR 0009).
+#
+# Assets only: there is no `main`, so no Worker script runs and nothing is billed per
+# request. Everything this app does happens in the reader's browser (ADR 0008).
+
+name = "duolistening"
+compatibility_date = "2026-09-08"
+
+[assets]
+directory = "./dist/web"
+# Hash routing means every route is already `/` plus a fragment, so this only matters
+# for someone who types a path by hand. Real files — /probe.wav, /kuromoji/* — are
+# still served as themselves.
+not_found_handling = "single-page-application"
