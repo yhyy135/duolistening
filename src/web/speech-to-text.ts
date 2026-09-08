@@ -59,9 +59,13 @@ export function createSpeechToText(options: SpeechToTextOptions) {
   const doFetch = options.fetch ?? globalThis.fetch;
   const endpoint = `${slot.baseUrl.replace(/\/$/, "")}/audio/transcriptions`;
 
-  function post(url: string, language: LanguageCode | undefined, withWords: boolean) {
+  /** Either a URL the endpoint fetches, or the bytes themselves. */
+  type Source = { url: string } | { blob: Blob };
+
+  function post(source: Source, language: LanguageCode | undefined, withWords: boolean) {
     const form = new FormData();
-    form.set("url", url);
+    if ("url" in source) form.set("url", source.url);
+    else form.set("file", source.blob, "episode");
     form.set("model", slot.model);
     // Omitted when the reader has not said what they are studying — every
     // OpenAI-compatible endpoint detects the language itself in that case.
@@ -80,36 +84,61 @@ export function createSpeechToText(options: SpeechToTextOptions) {
     });
   }
 
+  async function send(source: Source, language?: LanguageCode): Promise<Transcribed> {
+    let response: Response;
+    try {
+      response = await post(source, language, true);
+      // Not every OpenAI-compatible implementation knows the granularities field.
+      // Losing word timing is a graceful downgrade (ADR 0004); failing is not.
+      if (response.status === 400 && !(await looksTooLarge(response))) {
+        response = await post(source, language, false);
+      }
+    } catch (cause) {
+      throw new TranscriptionError("network", `Could not reach ${endpoint}`, { cause });
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new TranscriptionError(
+        reasonFor(response.status, detail),
+        `Transcription failed with ${response.status}: ${detail.slice(0, 500)}`,
+      );
+    }
+
+    const body = (await response.json().catch(() => null)) as VerboseJson | null;
+    if (!body) throw new TranscriptionError("bad_response", "Transcription returned no JSON");
+    if (typeof body.duration !== "number" || !(body.duration > 0)) {
+      // Without it there is no byte-rate, and therefore no way to place the next
+      // chunk. Better to say so than to guess and seam in the wrong place.
+      throw new TranscriptionError("bad_response", "Transcription reported no duration");
+    }
+    return { durationSec: body.duration, segments: toSegments(body) };
+  }
+
   return {
-    async transcribeUrl(url: string, language?: LanguageCode): Promise<Transcribed> {
-      let response: Response;
-      try {
-        response = await post(url, language, true);
-        // Not every OpenAI-compatible implementation knows the granularities field.
-        // Losing word timing is a graceful downgrade (ADR 0004); failing is not.
-        if (response.status === 400 && !(await looksTooLarge(response))) {
-          response = await post(url, language, false);
-        }
-      } catch (cause) {
-        throw new TranscriptionError("network", `Could not reach ${endpoint}`, { cause });
-      }
+    /**
+     * The bytes this browser already holds, uploaded.
+     *
+     * This is the path that guarantees the Transcript describes the audio that was
+     * kept, and it exists because the URL path does not. Both fetches went through
+     * the proxy and still disagreed: one real episode came back as 412.5 seconds to
+     * a browser and 449.8 to the transcription provider, with different advertising
+     * in each. The proxy pins a User-Agent, but a Worker runs at whichever edge the
+     * request entered, so the origin sees a different region for each caller — and
+     * this host varies its ad load by region. Transcribing the bytes we keep is the
+     * only thing that makes the timeline and the audio the same recording.
+     */
+    transcribeBlob(blob: Blob, language?: LanguageCode): Promise<Transcribed> {
+      return send({ blob }, language);
+    },
 
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new TranscriptionError(
-          reasonFor(response.status, detail),
-          `Transcription failed with ${response.status}: ${detail.slice(0, 500)}`,
-        );
-      }
-
-      const body = (await response.json().catch(() => null)) as VerboseJson | null;
-      if (!body) throw new TranscriptionError("bad_response", "Transcription returned no JSON");
-      if (typeof body.duration !== "number" || !(body.duration > 0)) {
-        // Without it there is no byte-rate, and therefore no way to place the next
-        // chunk. Better to say so than to guess and seam in the wrong place.
-        throw new TranscriptionError("bad_response", "Transcription reported no duration");
-      }
-      return { durationSec: body.duration, segments: toSegments(body) };
+    /**
+     * The endpoint fetches for itself. Still used for chunked episodes, where the
+     * caller asks the proxy for byte ranges — and still carries the mismatch risk
+     * described above, which is why it is no longer the whole-file path.
+     */
+    transcribeUrl(url: string, language?: LanguageCode): Promise<Transcribed> {
+      return send({ url }, language);
     },
   };
 }

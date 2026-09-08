@@ -167,50 +167,61 @@ function toLine(segment: RawSegment): Line {
 
 // ---------------------------------------------------------------- driving it
 
+type Answer = Promise<{ durationSec: number; segments: RawSegment[] }>;
+
 export interface TranscribeDeps {
   /**
-   * Transcribes one URL the endpoint fetches for itself. Every byte goes through the
-   * proxy — never the origin directly — because at least one real host splices
-   * advertising by User-Agent, answering two clients thirty seconds apart for the
-   * same episode. A byte offset means nothing across two versions of a file, so one
-   * client with one fixed User-Agent has to fetch all of them.
+   * The audio this browser holds, uploaded — the whole-file path.
+   *
+   * It exists because letting the endpoint fetch for itself does not guarantee the
+   * two of you get the same recording. One real episode came back as 412.5 seconds
+   * to the browser and 449.8 to the transcription provider, with different
+   * advertising in each, *both* fetched through the proxy: a Worker runs at whichever
+   * edge the request entered, so the origin sees a different region per caller and
+   * this host varies its ad load by region. A Transcript that describes a recording
+   * nobody kept is wrong in a way nothing downstream can notice.
    */
-  transcribeUrl(url: string): Promise<{ durationSec: number; segments: RawSegment[] }>;
+  transcribeBlob(blob: Blob): Answer;
+  audio: Blob;
+  /**
+   * The endpoint fetches a byte range for itself. Still how chunked episodes work,
+   * and still carrying the mismatch above — slicing the stored Blob locally would
+   * settle it, and is deliberately not done yet.
+   */
+  transcribeUrl(url: string): Answer;
   /** The proxy URL serving `[startByte, endByte]` of this episode as a whole file. */
   sliceUrl(range?: { startByte: number; endByte: number }): string;
-  totalBytes: number;
   limit?: number;
   onProgress?: (done: number) => void;
 }
 
 /**
  * Sequential by construction, since each chunk's start comes from the last one's
- * transcript — and measurement says that costs nothing. Uploading was 75-80% of a
- * chunk's wall time, and the proxy removes the upload leg entirely by letting the
- * endpoint fetch the slice itself; what is left is fast enough that concurrency
- * would be optimising the small half.
+ * transcript — and measurement says that costs nothing: what is left after the
+ * upload is fast enough that concurrency would be optimising the small half.
  */
 export async function transcribe(deps: TranscribeDeps): Promise<Transcript> {
   const limit = deps.limit ?? REQUEST_LIMIT_BYTES;
+  // The Blob's own size, rather than a separate probe of the origin: it is the
+  // number that actually describes what will be transcribed, and it costs no request.
+  const totalBytes = deps.audio.size;
 
-  if (fitsWhole(deps.totalBytes, limit)) {
-    const whole = await deps.transcribeUrl(deps.sliceUrl());
+  if (fitsWhole(totalBytes, limit)) {
+    const whole = await deps.transcribeBlob(deps.audio);
     deps.onProgress?.(1);
-    return stitch([
-      { chunk: { startByte: 0, endByte: deps.totalBytes - 1, startSec: 0 }, ...whole },
-    ]);
+    return stitch([{ chunk: { startByte: 0, endByte: totalBytes - 1, startSec: 0 }, ...whole }]);
   }
 
   const results: ChunkResult[] = [];
-  let next: Chunk | null = planFirst(deps.totalBytes, limit);
+  let next: Chunk | null = planFirst(totalBytes, limit);
   while (next) {
     const chunk: Chunk = next;
     const answer = await deps.transcribeUrl(deps.sliceUrl(chunk));
     results.push({ chunk, ...answer });
-    next = planNext(results[results.length - 1] as ChunkResult, deps.totalBytes, limit);
+    next = planNext(results[results.length - 1] as ChunkResult, totalBytes, limit);
     // Bytes covered so far is the only honest progress here: the chunk count is not
     // known up front, because each seam is only discovered once the last one lands.
-    deps.onProgress?.(Math.min(1, (chunk.endByte + 1) / deps.totalBytes));
+    deps.onProgress?.(Math.min(1, (chunk.endByte + 1) / totalBytes));
   }
   return stitch(results);
 }

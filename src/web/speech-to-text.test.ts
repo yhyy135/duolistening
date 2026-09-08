@@ -61,6 +61,37 @@ test("the endpoint is handed a url, never bytes", async () => {
   assert.equal(fetch.forms[0]?.get("response_format"), "verbose_json");
 });
 
+test("transcribeBlob uploads the bytes, so the Transcript describes what was kept", async () => {
+  const fetch = spy(ok(body()));
+  const audio = new Blob(["MP3BYTES"], { type: "audio/mpeg" });
+
+  const result = await createSpeechToText({ slot, fetch: fetch.impl }).transcribeBlob(audio);
+
+  // A URL lets the endpoint fetch its own copy, and one real host answered a browser
+  // with 412.5 seconds and the provider with 449.8 — different advertising in each,
+  // both through the proxy, because a Worker runs at the caller's own edge.
+  // Wrapped in a File on the way into the form, since the field needs a name — so
+  // this checks the bytes rather than the identity of the object carrying them.
+  const sent = fetch.forms[0]?.get("file") as File;
+  assert.equal(await sent.text(), "MP3BYTES");
+  assert.equal(sent.type, "audio/mpeg");
+  assert.equal(fetch.forms[0]?.has("url"), false);
+  assert.equal(fetch.forms[0]?.get("model"), "whisper-large-v3-turbo");
+  assert.equal(result.durationSec, 928.57);
+});
+
+test("both paths share their error handling, so neither can drift from the other", async () => {
+  for (const send of ["blob", "url"] as const) {
+    const fetch = spy(new Response("nope", { status: 401 }));
+    const stt = createSpeechToText({ slot, fetch: fetch.impl });
+    await assert.rejects(
+      send === "blob" ? stt.transcribeBlob(new Blob(["x"])) : stt.transcribeUrl("https://p/"),
+      (error: TranscriptionError) => error.reason === "auth",
+      send,
+    );
+  }
+});
+
 test("both granularities are asked for, because word alone returns no segments", async () => {
   const fetch = spy(ok(body()));
   await createSpeechToText({ slot, fetch: fetch.impl }).transcribeUrl("https://proxy/");

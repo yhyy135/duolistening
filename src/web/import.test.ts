@@ -48,12 +48,10 @@ function deps(over: Partial<ImportDeps> = {}) {
   const store = over.store ?? fakeStore();
   const base: ImportDeps = {
     store,
-    totalBytes: async () => {
-      called.push("totalBytes");
-      return 43_421_257;
-    },
-    transcribe: async (_url, _total, onProgress) => {
-      called.push("transcribe");
+    transcribe: async (_url, audio, onProgress) => {
+      // Recorded with its size, because the bytes handed over must be the bytes the
+      // store kept — that identity is the whole reason audio is fetched before this.
+      called.push(`transcribe(${audio.size})`);
       onProgress(0.5);
       return bare;
     },
@@ -86,23 +84,25 @@ test("a fresh import runs every step and ends ready", async () => {
 
   const resource = await startImport(d, { source, title: "ep" }, onProgress);
 
-  assert.deepEqual(called, ["totalBytes", "transcribe", "fetchAudio", "annotate"]);
+  // Audio first: the Transcript is made from the bytes that were kept, rather than
+  // from whatever the provider happened to fetch for itself.
+  assert.deepEqual(called, ["fetchAudio", "transcribe(3)", "annotate"]);
   assert.equal(resource.phase, "ready");
   assert.deepEqual(store.state.transcript, translated);
   assert.equal(store.state.audio?.type, "audio/mpeg");
   assert.deepEqual(
     seen.map((s) => s.phase),
-    ["transcribing", "transcribing", "fetching", "annotating", "annotating", "ready"],
+    ["fetching", "transcribing", "transcribing", "annotating", "annotating", "ready"],
   );
 });
 
 test("the Resource is on the shelf before any work starts", async () => {
   const { deps: d, store } = deps({
-    totalBytes: async () => {
+    fetchAudio: async () => {
       // By the time the first real call happens, the shelf already knows about it.
       assert.equal(store.state.resource?.id, "r1");
-      assert.equal(store.state.resource?.phase, "transcribing");
-      return 1000;
+      assert.equal(store.state.resource?.phase, "fetching");
+      return new Blob(["MP3"], { type: "audio/mpeg" });
     },
   });
   await startImport(d, { source, title: "ep" }, () => {});
@@ -159,6 +159,8 @@ test("a retry with a Transcript but no audio fetches only the audio", async () =
 
   await retryImport(d, failed, () => {});
 
+  // No transcribe: the Transcript already existed, and paying for it twice to
+  // recover a missing download is exactly what a resume must not do.
   assert.deepEqual(called, ["fetchAudio", "annotate"]);
 });
 

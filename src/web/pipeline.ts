@@ -2,7 +2,7 @@ import type { Settings } from "../shared/model.ts";
 import { createAnnotator } from "./annotate.ts";
 import type { ImportDeps } from "./import.ts";
 import { createJapaneseTokenizerOnce } from "./japanese.ts";
-import { fetchTotalBytes, proxyUrl, sliceUrls } from "./proxy.ts";
+import { proxyUrl, sliceUrls } from "./proxy.ts";
 import { createSpeechToText } from "./speech-to-text.ts";
 import * as store from "./store.ts";
 import { transcribe } from "./transcribe.ts";
@@ -43,12 +43,14 @@ export function buildImportDeps(settings: Settings): ImportDeps {
     newId: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),
 
-    totalBytes: (episodeUrl) => fetchTotalBytes(settings.proxy, episodeUrl),
-
-    transcribe: (episodeUrl, total, onProgress) =>
+    transcribe: (episodeUrl, audio, onProgress) =>
       transcribe({
-        totalBytes: total,
-        sliceUrl: sliceUrls(settings.proxy, episodeUrl, total),
+        audio,
+        transcribeBlob: (blob) => speech.transcribeBlob(blob, settings.targetLanguage),
+        // Only reached for an episode over the request limit, which is still chunked
+        // by asking the proxy for ranges. `sliceUrls` wants a total; the Blob's own
+        // size is the honest one, since it describes the bytes that were kept.
+        sliceUrl: sliceUrls(settings.proxy, episodeUrl, audio.size),
         transcribeUrl: (url) => speech.transcribeUrl(url, settings.targetLanguage),
         onProgress,
       }),

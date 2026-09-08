@@ -21,6 +21,13 @@ const RATE = 28_000;
 const DURATION = TOTAL / RATE;
 
 /**
+ * Stands in for the stored audio. The planner reads only `.size`, and the fake
+ * endpoint below reads only `.size` — so allocating tens of megabytes of zeros per
+ * test would buy nothing but a slower suite.
+ */
+const sized = (bytes: number) => ({ size: bytes }) as Blob;
+
+/**
  * A stand-in endpoint that actually behaves like one: it reports the duration the
  * byte range really represents, and cuts segments on its own boundaries rather than
  * on the chunk's — which is the whole reason a seam has to be discovered instead of
@@ -29,25 +36,36 @@ const DURATION = TOTAL / RATE;
  */
 function endpoint(bytesPerSecond = RATE, segmentSec = 10) {
   const asked: { startByte: number; endByte: number }[] = [];
+  const uploaded: Blob[] = [];
+
+  const answer = (startByte: number, endByte: number) => {
+    const durationSec = (endByte - startByte + 1) / bytesPerSecond;
+    const segments: RawSegment[] = [];
+    // Deliberately offset, so no segment boundary lands on the chunk edge.
+    for (let at = 0; at < durationSec; at += segmentSec) {
+      segments.push({
+        startSec: at,
+        endSec: Math.min(at + segmentSec, durationSec),
+        text: `${(startByte + at * bytesPerSecond).toFixed(0)}`,
+      });
+    }
+    return { durationSec, segments };
+  };
+
   return {
     asked,
+    uploaded,
+    async transcribeBlob(blob: Blob) {
+      uploaded.push(blob);
+      asked.push({ startByte: 0, endByte: blob.size - 1 });
+      return answer(0, blob.size - 1);
+    },
     async transcribeUrl(url: string) {
       const [, start, end] = /(\d+)-(\d+)$/.exec(url)?.map(Number) ?? [];
       const startByte = start ?? 0;
       const endByte = end ?? TOTAL - 1;
       asked.push({ startByte, endByte });
-
-      const durationSec = (endByte - startByte + 1) / bytesPerSecond;
-      const segments: RawSegment[] = [];
-      // Deliberately offset, so no segment boundary lands on the chunk edge.
-      for (let at = 0; at < durationSec; at += segmentSec) {
-        segments.push({
-          startSec: at,
-          endSec: Math.min(at + segmentSec, durationSec),
-          text: `${(startByte + at * bytesPerSecond).toFixed(0)}`,
-        });
-      }
-      return { durationSec, segments };
+      return answer(startByte, endByte);
     },
   };
 }
@@ -66,20 +84,30 @@ const result = (over: Partial<ChunkResult> = {}): ChunkResult => ({
   ...over,
 });
 
-test("an episode under the limit is one request and no planning at all", async () => {
+test("an episode under the limit is uploaded whole, not fetched by URL", async () => {
   const small = 5_056_814;
   const fake = endpoint();
+  const audio = sized(small);
   assert.equal(fitsWhole(small), true);
 
-  const lines = await transcribe({ ...fake, sliceUrl, totalBytes: small });
+  const lines = await transcribe({ ...fake, sliceUrl, audio });
 
-  assert.deepEqual(
-    fake.asked,
-    [{ startByte: 0, endByte: TOTAL - 1 }],
-    "asked for the whole file",
-  );
+  // The bytes that were kept are the bytes that were transcribed. Letting the
+  // endpoint fetch for itself does not promise that: one real episode came back as
+  // 412.5 seconds here and 449.8 there, both through the proxy, because the host
+  // varies its advertising by region and a Worker runs at the caller's edge.
+  assert.deepEqual(fake.uploaded, [audio]);
+  assert.deepEqual(fake.asked, [{ startByte: 0, endByte: small - 1 }]);
   assert.ok(lines.length > 0);
   assert.equal(lines[0]?.startSec, 0);
+});
+
+test("the size comes from the Blob, so nothing probes the origin for one", async () => {
+  // A separate probe could answer for a different version of the file than the one
+  // in hand — which is the same mismatch in a smaller disguise.
+  const fake = endpoint();
+  await transcribe({ ...fake, sliceUrl, audio: sized(REQUEST_LIMIT_BYTES) });
+  assert.deepEqual(fake.asked, [{ startByte: 0, endByte: REQUEST_LIMIT_BYTES - 1 }]);
 });
 
 test("the seam is the last complete segment, not the chunk edge", () => {
@@ -171,7 +199,7 @@ test("stitching puts every chunk back on one timeline, words included", () => {
 
 test("a full episode comes back as one continuous timeline with no gap at the seams", async () => {
   const fake = endpoint();
-  const lines = await transcribe({ ...fake, sliceUrl, totalBytes: TOTAL });
+  const lines = await transcribe({ ...fake, sliceUrl, audio: sized(TOTAL) });
 
   assert.ok(fake.asked.length > 1, "needed more than one chunk");
   assert.equal(fake.asked[0]?.startByte, 0);
@@ -201,7 +229,7 @@ test("a variable bitrate file self-corrects instead of drifting", async () => {
   // different rate than the first chunk implied, which is what VBR does — each chunk's
   // own reported duration has to re-anchor the next, or error compounds down the file.
   const fake = endpoint(RATE * 0.8);
-  const lines = await transcribe({ ...fake, sliceUrl, totalBytes: TOTAL });
+  const lines = await transcribe({ ...fake, sliceUrl, audio: sized(TOTAL) });
 
   assert.equal(fake.asked.at(-1)?.endByte, TOTAL - 1);
   for (const [index, line] of lines.entries()) {
@@ -218,7 +246,7 @@ test("progress only ever moves forward and finishes at one", async () => {
   await transcribe({
     ...endpoint(),
     sliceUrl,
-    totalBytes: TOTAL,
+    audio: sized(TOTAL),
     onProgress: (p) => seen.push(p),
   });
 

@@ -23,12 +23,20 @@ import type {
  */
 
 export interface ImportDeps {
-  /** Total bytes of the episode, measured through the proxy — see `proxy.ts`. */
-  totalBytes(episodeUrl: string): Promise<number>;
-  /** Chunked transcription; every byte travels proxy-to-endpoint. */
+  /**
+   * Transcribes the audio this browser has already stored. The Blob knows its own
+   * size, so nothing probes the origin for one — and the size it reports is the size
+   * of the recording that will actually be kept, which a separate probe could not
+   * promise.
+   *
+   * `episodeUrl` is still here because an episode over the endpoint's request limit
+   * is still chunked by asking the proxy for byte ranges. That path keeps the
+   * mismatch this ordering was changed to fix; slicing the Blob locally would settle
+   * it too, and is deliberately left for later.
+   */
   transcribe(
     episodeUrl: string,
-    totalBytes: number,
+    audio: Blob,
     onProgress: (fraction: number) => void,
   ): Promise<Transcript>;
   /** Translation, and Japanese Tokens when the text turns out to want them. */
@@ -121,28 +129,32 @@ async function run(
     const episodeUrl = audioUrlOf(current.source);
     let transcript = await deps.store.getTranscript(current.id);
 
+    // Audio first, and the ordering is the point rather than a detail. It used to come
+    // second, back when transcription let the endpoint fetch the audio for itself —
+    // until one real episode arrived as 412.5 seconds here and 449.8 at the provider,
+    // each carrying different advertising, *both* fetched through the proxy. A Worker
+    // runs at whichever edge a request entered, so the origin sees a different region
+    // per caller, and this host varies its ad load by region. Pinning a User-Agent
+    // cannot reach that. The Transcript now describes the recording that was kept,
+    // because it is made from it.
+    let audio = await deps.store.getAudio(current.id);
+    if (!audio) {
+      await advance("fetching");
+      audio = await deps.fetchAudio(episodeUrl);
+      // Stored before transcribing: it is the slowest thing to fetch again, and
+      // everything after this point can fail without losing it.
+      await deps.store.save({ resource: current, audio });
+    }
+
     if (!transcript) {
       await advance("transcribing");
-      const total = await deps.totalBytes(episodeUrl);
-      transcript = await deps.transcribe(episodeUrl, total, (progress) =>
+      transcript = await deps.transcribe(episodeUrl, audio, (progress) =>
         onProgress({ phase: "transcribing", progress }),
       );
       // Saved bare, before anything else can fail. Transcription is the expensive
       // step, and this is also what lets a later retry skip straight past it.
       current = { ...current, durationSec: endOf(transcript) || current.durationSec };
       await deps.store.save({ resource: current, transcript });
-    }
-
-    // Before annotating rather than after: someone can start listening as soon as
-    // there is audio and a Transcript, and the translations fill in underneath them.
-    if (!(await deps.store.getAudio(current.id))) {
-      await advance("fetching");
-      // Captured now rather than streamed at playback, and not only for offline use.
-      // One real host splices advertising per fetch — the same episode came back
-      // thirty seconds longer to a different client — so audio fetched next week
-      // would sit a whole ad break away from the timestamps made from it today.
-      const audio = await deps.fetchAudio(episodeUrl);
-      await deps.store.save({ resource: current, audio });
     }
 
     await advance("annotating");
