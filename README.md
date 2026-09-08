@@ -106,7 +106,13 @@ It takes minutes, and the shelf shows the phase as it goes.
 Keep the tab open. The import runs in the page, so closing it abandons the import —
 the entry stays on the shelf and **Resume** picks up from whatever survived. The same
 button appears after a failure, with the reason beside it, and it never starts over:
-a failed translation does not mean paying to transcribe the episode again.
+a failed download does not mean paying to transcribe the episode again.
+
+An import stops at the transcript. **Translation happens while you listen**: opening an
+episode translates the lines around where you are, a few minutes' worth at a time, and
+they appear under the lines as they arrive. Resuming at twenty minutes translates
+twenty minutes in, not the beginning — and an episode you give up on five minutes into
+only costs five minutes of translation. Nothing to press; it follows playback.
 
 ## Export your library
 
@@ -115,10 +121,11 @@ was refused by every browser tested — so an export is the only copy of a trans
 that survives a browser deciding it needs the room. **Export** on the library screen
 writes one JSON file.
 
-It holds your transcripts, your shelf and your playback positions. It does not hold
-audio, which is around forty-five times larger and can be fetched again, and it does
-not hold your API keys. Importing one only ever adds: an episode already on the shelf
-is left exactly as it is.
+It holds your transcripts, your shelf and your playback positions — including whatever
+has been translated so far, so a library you have listened to travels with its
+translations. It does not hold audio, which is around forty-five times larger and can
+be fetched again, and it does not hold your API keys. Importing one only ever adds: an
+episode already on the shelf is left exactly as it is.
 
 ## Development
 

@@ -8,18 +8,17 @@ import type {
 } from "../shared/model.ts";
 
 /**
- * ingest → transcribe → annotate, in the tab rather than on a server (ADR 0008).
+ * ingest → transcribe, in the tab rather than on a server (ADR 0008).
  *
- * The shape changed with the architecture. Audio used to be downloaded first because
- * transcription read it off a disk; now the endpoint fetches its own slices through
- * the proxy (ADR 0010) and the browser never holds the audio to transcribe it at all.
- * So the download moved to where it is actually needed — playback — and the expensive
- * artifact, the Transcript, is reached and saved sooner.
+ * Translation used to be the third step here, and an episode was not playable until
+ * every Line of it had been through the Text Model. It now happens while someone is
+ * listening, around wherever they are (ADR 0011) — so this ends at a Transcript, and
+ * an import is done when there are Lines to play against.
  *
  * What did not change is that a retry resumes and never restarts. A stored Transcript
- * means annotate only; stored audio means skip the download. Restarting instead would
- * pay the transcription bill again to recover from a rate-limited translation, making
- * the cheapest failure the most expensive one.
+ * means there is nothing left to do; stored audio means skip the download. Restarting
+ * instead would pay the transcription bill again to recover from a failed download,
+ * making the cheapest failure the most expensive one.
  */
 
 export interface ImportDeps {
@@ -38,11 +37,6 @@ export interface ImportDeps {
     episodeUrl: string,
     audio: Blob,
     onProgress: (fraction: number) => void,
-  ): Promise<Transcript>;
-  /** Translation, and Japanese Tokens when the text turns out to want them. */
-  annotate(
-    transcript: Transcript,
-    hooks: { onProgress: (f: number) => void; onBatch: (partial: Transcript) => Promise<void> },
   ): Promise<Transcript>;
   /** The audio itself, for playback — already labelled with its true content type. */
   fetchAudio(episodeUrl: string): Promise<Blob>;
@@ -151,22 +145,14 @@ async function run(
       transcript = await deps.transcribe(episodeUrl, audio, (progress) =>
         onProgress({ phase: "transcribing", progress }),
       );
-      // Saved bare, before anything else can fail. Transcription is the expensive
-      // step, and this is also what lets a later retry skip straight past it.
+      // Saved bare, before the shelf is told the import finished. Transcription is
+      // the expensive step, and this is what lets a later retry skip straight past it.
       current = { ...current, durationSec: endOf(transcript) || current.durationSec };
       await deps.store.save({ resource: current, transcript });
     }
 
-    await advance("annotating");
-    const annotated = await deps.annotate(transcript, {
-      onProgress: (progress) => onProgress({ phase: "annotating", progress }),
-      // Each batch as it lands, not just the finished article: the Resource is
-      // already playable, so translations appear while it is being listened to.
-      onBatch: (partial) => deps.store.save({ resource: current, transcript: partial }),
-    });
-
     current = { ...current, phase: "ready" };
-    await deps.store.save({ resource: current, transcript: annotated });
+    await deps.store.save({ resource: current, transcript });
     onProgress({ phase: "ready", progress: 1 });
     return current;
   } catch (error) {

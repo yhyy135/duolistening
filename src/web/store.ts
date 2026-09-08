@@ -157,6 +157,20 @@ export function save(entry: {
 }
 
 /**
+ * The Lines on their own, without the Resource row beside them.
+ *
+ * `save` above writes both, and the caller would have to hand back a Resource it read
+ * when the screen opened — clobbering the `lastPositionSec` written under it since.
+ * Translation now lands while something is playing (ADR 0011), so those two writers
+ * are live at the same time.
+ */
+export function saveTranscript(id: ResourceId, transcript: Transcript): Promise<void> {
+  return tx(["transcripts"], "readwrite", (transaction) => {
+    transaction.objectStore("transcripts").put(transcript, id);
+  });
+}
+
+/**
  * Called from `timeupdate`, so several times a minute for as long as something is
  * playing. It touches one row and never reads the Transcript or audio beside it.
  */

@@ -1,0 +1,15 @@
+# Translate while listening, not before it
+
+Status: accepted.
+
+Translation is no longer a step in the import. An import ends at a Transcript, and the player asks the Text Model for a window of Lines around wherever playback is — the block being listened to, one ahead and one behind, forty Lines to a block — writing each window back to IndexedDB as it lands. `nextWindow` in `annotate.ts` decides which window; the Annotator itself is unchanged, and simply annotates whatever slice it is handed.
+
+The old order was front-to-back over the whole episode, which put the wait in the wrong place twice. Someone resuming a fifty-minute episode at twenty minutes waited for the nineteen minutes of Lines they had already heard before the ones on screen appeared; and an episode abandoned after five minutes was paid for in full. Windowing puts the first request where the eyes are — about four seconds to the Lines being read, against a minute or more for a whole episode — and bills only the parts anyone actually reaches. On a 26-minute episode at roughly 300 Lines, the front-to-back path was eight calls before the reader saw anything under the current Line; the window is one, or two while the Transcript is still cold.
+
+We considered translating a window at import time and the rest lazily, so an episode arrives partly done. Rejected: it reintroduces the guess about where someone will start listening, which is the guess windowing exists to avoid, and the position is not known until the player opens.
+
+The blocks are a fixed grid rather than a moving range, so "have we asked for this yet" is one number instead of a set of overlapping intervals to merge — seeking back and forth across a minute must not produce a slightly different request each time. A block is marked asked before the request goes out, not after it comes back, so a rate-limited window is left alone rather than retried on every render; reloading the page asks again. And the Japanese decision is made once over the whole Transcript rather than per window, since a window with no kana in it is not evidence about the episode.
+
+Known ceilings, both accepted. Playback can outrun translation on a fast connection to a slow model — the Lines are there and the audio plays, the translations simply arrive behind. And an offline reader now gets a Transcript with no translations under it, where before an imported episode carried its own; the export still carries whatever has been translated so far, so a Library that has been listened to travels with its translations.
+
+This supersedes the part of [ADR 0005](0005-japanese-tagging-via-morphological-analyzer.md) that says Tokens are computed for every Line at transcription time. They are computed for the Lines in a window, when that window is annotated. Nothing else in 0005 changes: Tokens still come from kuromoji rather than the Text Model, they are still stored on the Line, and they are still shown only for the Line that is playing.

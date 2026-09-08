@@ -5,8 +5,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Line, Resource, Token, Transcript } from "../shared/model.ts";
+import {
+  JAPANESE,
+  type Line,
+  type Resource,
+  type Settings,
+  type Token,
+  type Transcript,
+} from "../shared/model.ts";
 import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
+import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
+import { buildAnnotator } from "./pipeline.ts";
 import { proxyUrl } from "./proxy.ts";
 import {
   flushPosition,
@@ -15,6 +24,7 @@ import {
   getTranscript,
   readSettings,
   savePosition,
+  saveTranscript,
 } from "./store.ts";
 import { useT } from "./i18n.ts";
 import { createTextModel } from "./text-model.ts";
@@ -52,6 +62,7 @@ function storedRate(): number {
 
 export function PlayerScreen({ id }: { id: string }) {
   const [data, setData] = useState<PlayableResource | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
@@ -107,6 +118,11 @@ export function PlayerScreen({ id }: { id: string }) {
           ? proxyUrl(settings?.proxy, resource.source.episodeUrl)
           : "";
 
+      // Where playback is about to be, before <audio> has loaded enough metadata to
+      // be moved there. The translation window below reads this, and starting it at
+      // zero would translate the opening minutes for someone resuming at twenty.
+      seconds.current = resource.lastPositionSec ?? 0;
+      setSettings(settings ?? null);
       setData({ resource, transcript: transcript ?? [], audioUrl });
     })().catch((failure: unknown) => {
       if (!dropped) setError(reason(failure));
@@ -118,16 +134,15 @@ export function PlayerScreen({ id }: { id: string }) {
     };
   }, [id, t]);
 
-  // Opened while translation is still filling in: re-read the Transcript as it
-  // lands, so newly-translated Lines appear without a reload.
+  // Opened at a deep link while the import is still running — the shelf only links
+  // here once there is something to play. Re-read until it lands.
   useEffect(() => {
     const phase = data?.resource.phase;
     if (!phase || phase === "ready" || phase === "failed") return;
     // Polling, where this used to subscribe to the import's own event stream. The
-    // import now runs in whichever screen started it and publishes nothing, so the
-    // store is the only thing both sides share — and a couple of seconds is well
-    // inside what a translation batch takes to land. `audioUrl` is deliberately left
-    // out of the merge: replacing it would reset the <audio> element mid-playback.
+    // import runs in whichever screen started it and publishes nothing, so the store
+    // is the only thing both sides share. `audioUrl` is deliberately left out of the
+    // merge: replacing it would reset the <audio> element mid-playback.
     const timer = setInterval(async () => {
       const [resource, transcript] = await Promise.all([getResource(id), getTranscript(id)]);
       if (!resource) return;
@@ -247,6 +262,88 @@ export function PlayerScreen({ id }: { id: string }) {
     };
   }, [data, id]);
 
+  // ---------------------------------------------------------------- translation
+
+  /** One per Settings, not one per window: the kuromoji dictionary is a download. */
+  const annotator = useMemo(() => (settings ? buildAnnotator(settings) : null), [settings]);
+  /** Which blocks have been sent to the model on this visit — see `nextWindow`. */
+  const asked = useRef(new Set<number>());
+  const busy = useRef(false);
+  /** Bumped when a window lands, which is what asks for the one after it. */
+  const [pass, setPass] = useState(0);
+  /**
+   * Which block is being listened to. A dependency rather than `position.lineIndex`
+   * itself, so playing on through a block re-runs nothing and crossing into the next
+   * one re-runs once — the effect below fires per block, not per Line.
+   */
+  const block = Math.floor(Math.max(0, position.lineIndex) / BLOCK_LINES);
+  const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    asked.current = new Set();
+    setTranslationError(null);
+  }, [id]);
+
+  /**
+   * Translation happens while listening rather than during the import (ADR 0011): the
+   * window around the Line being played goes out, one request at a time, and appears
+   * in the lyrics as it lands. Someone resuming at twenty minutes waits for the Lines
+   * at twenty minutes, not for the nineteen minutes before them — and an episode
+   * nobody finishes is only paid for as far as it was listened to.
+   *
+   * The loop is the effect re-running rather than a `while`: each window ends by
+   * bumping `pass`, and `busy` is what keeps two of them from overlapping. Where
+   * playback is comes from the `seconds` ref, so a seek mid-request retargets the
+   * next window without cancelling the one in flight.
+   */
+  useEffect(() => {
+    const resource = data?.resource;
+    const lines = data?.transcript;
+    if (!annotator || !resource || !lines?.length || busy.current) return;
+
+    // Located from the `seconds` ref rather than from `block`: this also runs when a
+    // window lands, and by then playback has moved on from the render that scheduled it.
+    const next = nextWindow(lines, locate(lines, seconds.current).lineIndex, asked.current);
+    if (!next) return;
+
+    // Marked before the request rather than after it, so a window that fails is left
+    // alone instead of being asked for again on the next render. A reload retries it.
+    for (const asking of next.blocks) asked.current.add(asking);
+    busy.current = true;
+    setTranslating(true);
+
+    // Decided over the whole Transcript, never over the window: a window with no kana
+    // in it is not evidence that the episode is not Japanese, and Tokens appearing on
+    // some blocks and not others is the bug that would follow.
+    const targetLanguage =
+      resource.targetLanguage ?? (wantsJapanese(lines) ? JAPANESE : undefined);
+
+    annotator
+      .annotate(lines.slice(next.from, next.to), {
+        nativeLanguage: resource.nativeLanguage,
+        ...(targetLanguage && { targetLanguage }),
+      })
+      .then(async (annotated) => {
+        const merged = [...lines.slice(0, next.from), ...annotated, ...lines.slice(next.to)];
+        // Guarded by the Resource, not by an effect cleanup: an answer arriving after
+        // a seek is still this episode's, and dropping it would leave those Lines
+        // untranslated with their blocks already marked asked.
+        setData((current) =>
+          current?.resource.id === id ? { ...current, transcript: merged } : current,
+        );
+        // The Lines on their own. `save` would carry the Resource this screen read
+        // when it opened, overwriting the position written under it since.
+        await saveTranscript(id, merged);
+      })
+      .catch((failure: unknown) => setTranslationError(reason(failure)))
+      .finally(() => {
+        busy.current = false;
+        setTranslating(false);
+        setPass((n) => n + 1);
+      });
+  }, [annotator, data, id, block, pass]);
+
   /**
    * The shortcuts a listening tool actually needs. Line-granular, not ±5s: the whole
    * point of the Transcript is that the Line is the unit worth repeating.
@@ -335,13 +432,10 @@ export function PlayerScreen({ id }: { id: string }) {
   return (
     <main className="player">
       <h1>{resource.title}</h1>
-      {resource.phase === "annotating" && (
-        <p className="notice">
-          {/* No percentage: progress lives in whichever screen is driving the
-              import, and this one is only watching the store. */}
-          {t("player.translating")}
-        </p>
-      )}
+      {translating && <p className="notice">{t("player.translating")}</p>}
+      {/* Beside the lyrics rather than instead of them: a rate-limited translation
+          leaves an episode that still plays and still has its Lines. */}
+      {translationError && <p className="error">{translationError}</p>}
       <audio
         ref={audioRef}
         src={audioUrl}

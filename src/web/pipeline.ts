@@ -27,14 +27,23 @@ import { createTextModel } from "./text-model.ts";
  */
 const DICT_PATH = "/kuromoji/dict";
 
-export function buildImportDeps(settings: Settings): ImportDeps {
-  const speech = createSpeechToText({ slot: settings.transcriptionModel });
-  const annotator = createAnnotator({
+/**
+ * Translation and Japanese Tokens, built for the player rather than for the import:
+ * annotation happens a window at a time while someone is listening (ADR 0011). One
+ * per screen, not one per window, so the kuromoji dictionary is downloaded at most
+ * once no matter how many windows go out.
+ */
+export function buildAnnotator(settings: Settings) {
+  return createAnnotator({
     textModel: createTextModel({ slot: settings.textModel }),
     // A thunk, so a shelf of Spanish never pays for a Japanese dictionary — and the
     // module behind it is a dynamic import, so it is not in the bundle either.
     tokenizer: createJapaneseTokenizerOnce(DICT_PATH),
   });
+}
+
+export function buildImportDeps(settings: Settings): ImportDeps {
+  const speech = createSpeechToText({ slot: settings.transcriptionModel });
 
   return {
     store,
@@ -53,14 +62,6 @@ export function buildImportDeps(settings: Settings): ImportDeps {
         sliceUrl: sliceUrls(settings.proxy, episodeUrl, audio.size),
         transcribeUrl: (url) => speech.transcribeUrl(url, settings.targetLanguage),
         onProgress,
-      }),
-
-    annotate: (transcript, hooks) =>
-      annotator.annotate(transcript, {
-        nativeLanguage: settings.nativeLanguage,
-        ...(settings.targetLanguage && { targetLanguage: settings.targetLanguage }),
-        onProgress: hooks.onProgress,
-        onBatch: hooks.onBatch,
       }),
 
     /**

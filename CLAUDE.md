@@ -2,7 +2,7 @@
 
 A listening-practice tool. Import a podcast episode, transcribe it with your own LLM keys, and study it through a lyrics-style transcript: the current line scrolls into view and highlights as it plays, your native-language translation sits under each line, and Japanese gets furigana and part-of-speech colouring.
 
-Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — ten decisions, one paragraph each. 0008–0010 are the recent ones and they supersede 0001, 0003 and 0007.
+Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — eleven decisions, one paragraph each. 0008–0011 are the recent ones; they supersede 0001, 0003 and 0007 outright, and 0011 supersedes the part of 0005 that says when Tokens are computed.
 
 **Everything lives in the reader's browser.** No server, no accounts, no database, no `data/` directory. Settings — API keys included — the shelf, Transcripts and audio blobs are all in IndexedDB, which is what lets several people share one deployment while each pays for their own transcription (ADR 0008). The only thing deployed beside the static page is a Cloudflare Worker that proxies bytes (ADR 0009).
 
@@ -38,27 +38,27 @@ docs/adr/    why things are the way they are
 
 There is no `ports.ts` any more. It existed to hold the seams a server needed; with one implementation of everything, each module declares the narrow shape it actually depends on — the Annotator asks for `completeJson`, not for a whole TextModel.
 
-| Module              | What it hides                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `store.ts`          | All persistence — IndexedDB, and the audio content-type correction on the way in    |
-| `backup.ts`         | The export document, and validating one someone hands back                          |
-| `pipeline.ts`       | The composition root: the only file that knows how the pieces fit together          |
-| `import.ts`         | ingest → transcribe → annotate, and the retry that resumes one                      |
-| `transcribe.ts`     | **The deepest module.** Byte-range chunking, ASR-placed seams, stitching            |
-| `speech-to-text.ts` | One `/audio/transcriptions` call in `url` mode, and word-list-to-segment assignment |
-| `text-model.ts`     | `/chat/completions` — plain, JSON-repaired, or streamed — plus `listModels`         |
-| `annotate.ts`       | Batched translation, plus Japanese Tokens. Owns the "is it Japanese" branch         |
-| `japanese.ts`       | kuromoji: loading it, morphemes, part-of-speech mapping, katakana→hiragana          |
-| `proxy.ts`          | Every URL the Worker understands, an episode's size, and the proxy's own check      |
-| `podcast-feed.ts`   | RSS fetching (through the proxy) and parsing                                        |
-| `model-check.ts`    | Trying both slots for real, so a typo surfaces in Settings and not mid-import       |
-| `app.tsx`           | The hash route, the header, the theme, the Native Language context                  |
-| `library.tsx`       | The shelf, the paste-a-link box, live import progress, and export/import            |
-| `player.tsx`        | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI            |
-| `settings.tsx`      | Two model slots, the proxy, the language pair, and the connection checks            |
-| `shared/i18n.ts`    | Every user-facing string, in all eight languages — including the ask-AI prompt      |
-| `web/i18n.ts`       | Which of them is in force: the Native Language, held in a context                   |
-| `worker/index.ts`   | Following a redirect, adding CORS, and serving a byte range as a whole file         |
+| Module              | What it hides                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `store.ts`          | All persistence — IndexedDB, and the audio content-type correction on the way in                                           |
+| `backup.ts`         | The export document, and validating one someone hands back                                                                 |
+| `pipeline.ts`       | The composition root: the only file that knows how the pieces fit together                                                 |
+| `import.ts`         | ingest → transcribe, and the retry that resumes one                                                                        |
+| `transcribe.ts`     | **The deepest module.** Byte-range chunking, ASR-placed seams, stitching                                                   |
+| `speech-to-text.ts` | One `/audio/transcriptions` call in `url` mode, and word-list-to-segment assignment                                        |
+| `text-model.ts`     | `/chat/completions` — plain, JSON-repaired, or streamed — plus `listModels`                                                |
+| `annotate.ts`       | Batched translation, Japanese Tokens, and which window to translate next                                                   |
+| `japanese.ts`       | kuromoji: loading it, morphemes, part-of-speech mapping, katakana→hiragana                                                 |
+| `proxy.ts`          | Every URL the Worker understands, an episode's size, and the proxy's own check                                             |
+| `podcast-feed.ts`   | RSS fetching (through the proxy) and parsing                                                                               |
+| `model-check.ts`    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                              |
+| `app.tsx`           | The hash route, the header, the theme, the Native Language context                                                         |
+| `library.tsx`       | The shelf, the paste-a-link box, live import progress, and export/import                                                   |
+| `player.tsx`        | The lyrics view: rAF sweep, follow-mode scroll, speed, line loop, ask-AI, and the translation window that follows playback |
+| `settings.tsx`      | Two model slots, the proxy, the language pair, and the connection checks                                                   |
+| `shared/i18n.ts`    | Every user-facing string, in all eight languages — including the ask-AI prompt                                             |
+| `web/i18n.ts`       | Which of them is in force: the Native Language, held in a context                                                          |
+| `worker/index.ts`   | Following a redirect, adding CORS, and serving a byte range as a whole file                                                |
 
 ## Invariants that are easy to break
 
@@ -67,7 +67,7 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 - **Audio is stored with its true content type, never an assumed one.** These files are MP3 — podcast enclosures nearly always are — while a pipeline naming them `.m4a` will tell `<audio>` they are AAC-in-MP4. Chrome sniffs content and hides it completely; Safari believes the label and refuses with `MEDIA_ERR_SRC_NOT_SUPPORTED`, except where an `ID3` header is magic enough to override it, so whether an episode plays comes down to coincidence. The magic bytes therefore beat the declaration, at one choke point. (`store.ts`)
 - **Whatever serves the kuromoji dictionary must not claim `Content-Encoding: gzip`.** The browser would decode it first, and kuromoji's unguarded gunzip then throws inside an XHR `onload` handler — where the exception eats the callback and the tokenizer hangs with no error anywhere. (`vite.config.ts` for dev; a deployment requirement in production)
 - **kuromoji is loaded as a classic script, not imported.** Its gunzip dependency ends in `}).call(this)` and keeps the result as its global, which is `window` in a classic script and `undefined` in an ES module. (`japanese.ts`)
-- **A retry resumes; it never restarts.** A stored Transcript means annotate only; stored audio means skip the download. Restarting would pay the transcription bill again to recover from a rate-limited translation, making the cheapest failure the most expensive. (`import.ts`)
+- **A retry resumes; it never restarts.** A stored Transcript means there is nothing left to do; stored audio means skip the download. Restarting would pay the transcription bill again to recover from a failed download, making the cheapest failure the most expensive. (`import.ts`)
 - **Audio is captured during the import, not streamed at playback.** One real host splices advertising per fetch — the same episode came back thirty seconds longer to a different client — so audio pulled next week would sit a whole ad break away from the timestamps made from it today. That is also why every byte goes through the proxy, which pins one User-Agent: a byte offset means nothing across two versions of a file. (`import.ts`, `worker/index.ts`)
 - **The last position is parked in `localStorage`, not written to IndexedDB, when the page is closing.** A transaction opened at `pagehide` is not reliably committed, and there is no beacon for IndexedDB. `localStorage` is synchronous, which is the feature here. The store folds it back in on the next read — from both `getResource` and `listResources`, because a deep link to the player never touches the shelf. (`store.ts`, `player.tsx`)
 - **A chunk that reached the end of the file is the last one.** Otherwise the seam rule drops its final segment as truncated and plans another chunk to re-transcribe the tail — paying twice and stitching the same words in again. Continuity checks do not notice, because the duplicate still lands on a consistent timeline. (`transcribe.ts`)
@@ -75,6 +75,9 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 - **A transcription reply without a duration is refused.** That number is the byte-rate denominator the next chunk's seam is derived from; guessing it seams in the wrong place, silently. (`speech-to-text.ts`)
 - **`words` is omitted, never `[]`.** An empty array reads as "word timing exists" and the player renders karaoke highlighting against nothing. (`transcribe.ts`, ADR 0004)
 - **Translations are matched back by index, never by position.** A model that drops or reorders one entry would otherwise shift every later translation onto the wrong Line — invisible in the UI, wrong everywhere. (`annotate.ts`)
+- **A translation block is marked asked before the request goes out, not after it comes back.** The player re-checks the window on every render, so a window whose request failed — or whose reply skipped a Line — would otherwise be sent again immediately, forever. A reload is what retries one. (`player.tsx`, ADR 0011)
+- **Whether an episode is Japanese is decided over the whole Transcript, never over the window being translated.** The studied language is usually unset and the answer then comes from kana in the text; a window that happens to contain none is not evidence, and Tokens appearing on some blocks and not their neighbours is the bug that follows. (`annotate.ts`, `player.tsx`)
+- **A landed translation is written with `saveTranscript`, not `save`.** `save` also writes the Resource row, and the only Resource the player holds is the one it read when the screen opened — which would put back the `lastPositionSec` that has been written under it since. The two writers are live at the same time now that translation happens during playback. (`store.ts`)
 - **No secret leaves in an export.** `forExport` blanks them, and `backup.test.ts` sweeps the exported object for the values rather than checking three field names — because naming fields is exactly what failed when `proxy.key` joined Settings. (`backup.ts`)
 - **An import only ever adds.** A colliding id means the same Resource, and the copy already here may hold a playback position the file does not. (`backup.ts`)
 - **The connection check calls the endpoint the pipeline calls, in the mode it calls it.** A cheaper probe passes for a model that does not exist; an upload-only probe passes for a provider that cannot fetch a `url`, which is how every import moves audio. The transcription slot gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio". (`model-check.ts`)
@@ -107,6 +110,7 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 - **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
 - **Nothing has been deployed, and no episode has been imported end to end** on the new architecture. Every piece is verified on its own and the two halves have never been run together against a real feed.
 - **A Library is per-browser-per-origin.** A phone and a laptop are two Libraries with no path between them, and the export is the only bridge. For a listening app the phone is a plausible primary device, so this is the sharpest open question (ADR 0008).
+- **Translation can fall behind playback**, on a fast connection to a slow model: the Lines are there and the audio plays, the translations simply arrive under them late. Accepted (ADR 0011). A window that fails is not retried until the page is reloaded, and the only sign is the message beside the lyrics.
 - **The ask-AI popup is one shot.** One fixed prompt about one Line, no input box, no history — so re-opening it asks the identical question. `completeStream(prompt: string)` takes a single string; follow-up means giving it a message list.
 - **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so redoing one is delete-and-import.
 - **No Vite React plugin** — a dev edit reloads the page instead of hot-swapping the component, which loses playback position. Deliberate; production is unaffected.

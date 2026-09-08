@@ -12,6 +12,11 @@ import {
  * Japanese (ADR 0005). Whether Japanese is special is this module's business, not
  * its caller's.
  *
+ * It annotates exactly the Lines it is handed. Since ADR 0011 that is a window around
+ * wherever someone is listening rather than a whole episode, and `nextWindow` below is
+ * what decides which window — so this file owns both halves of the question, what to
+ * translate and how.
+ *
  * Returns new Lines; never mutates the input.
  */
 
@@ -46,12 +51,6 @@ export interface AnnotateOptions {
   /** Omitted when it is unknown: the Text Model then reads the source language
    *  off the Lines themselves, and Japanese is recognised from the text. */
   targetLanguage?: LanguageCode;
-  onProgress?: (fraction: number) => void;
-  /** Fired after each batch with the full Transcript so far, so a caller can let
-   *  playback start before every batch has translated — the Resource is already
-   *  playable once transcription is done, and this is what lets translations fill
-   *  in progressively instead of waiting for the whole thing. */
-  onBatch?: (partial: Transcript) => void | Promise<void>;
 }
 
 /** What the Text Model is asked to return per line. Short keys keep the reply small. */
@@ -77,15 +76,11 @@ export function createAnnotator(options: AnnotatorOptions) {
     async annotate(lines: Transcript, opts: AnnotateOptions): Promise<Transcript> {
       if (lines.length === 0) return [];
 
-      // The setting may say Japanese, or say nothing at all and leave the text to
-      // answer — kana is the giveaway, and no other language on the list has any.
-      const isJapanese =
-        opts.targetLanguage === JAPANESE ||
-        (opts.targetLanguage === undefined && lines.some((line) => KANA.test(line.text)));
-      const tokenize = isJapanese && tokenizer ? await tokenizer() : undefined;
-      // Tokenizing doesn't depend on translation, so it happens once up front rather
-      // than on every partial snapshot below — the New-Lines rule still holds, since
-      // this itself never touches the input Lines.
+      const tokenize =
+        wantsJapanese(lines, opts.targetLanguage) && tokenizer ? await tokenizer() : undefined;
+      // Tokenizing doesn't depend on translation, so it happens up front rather than
+      // in the merge below — the New-Lines rule still holds, since this itself never
+      // touches the input Lines.
       const withTokens: Transcript = lines.map((line) => ({
         ...line,
         ...(tokenize && { tokens: tokenize.tokenize(line.text) }),
@@ -101,7 +96,6 @@ export function createAnnotator(options: AnnotatorOptions) {
         });
 
       const batches = chunk(lines, batchSize);
-      let completed = 0;
 
       // Batches translate independently, so they go out concurrently (capped, to stay
       // under a provider's rate limit) instead of one-at-a-time — sequential awaiting
@@ -115,11 +109,6 @@ export function createAnnotator(options: AnnotatorOptions) {
             translations.set(entry.i, entry.t);
           }
         }
-        completed++;
-        // Written before the progress tick that will make a watcher look for it, so a
-        // caller who refetches on that tick already sees this batch's translations.
-        await opts.onBatch?.(merge());
-        opts.onProgress?.(completed / batches.length);
       }
 
       const queue = [...batches];
@@ -142,6 +131,87 @@ export function createAnnotator(options: AnnotatorOptions) {
 
 /** Hiragana and katakana. No other language in LANGUAGES uses either. */
 const KANA = /[\u3040-\u30ff]/;
+
+/**
+ * Whether these Lines want Japanese Tokens: the setting says so, or — when the studied
+ * language was left unset, which is the default — the text itself does.
+ *
+ * Exported because the caller now hands over a window of a Transcript rather than the
+ * whole of it (ADR 0011), and a window with no kana in it is not evidence of anything.
+ * The decision is made once, over every Line, and passed back down.
+ */
+export function wantsJapanese(lines: Transcript, targetLanguage?: LanguageCode): boolean {
+  if (targetLanguage) return targetLanguage === JAPANESE;
+  return lines.some((line) => KANA.test(line.text));
+}
+
+/**
+ * Lines per translation request. Also the default batch size, so the common case —
+ * two neighbouring blocks that have never been translated — is two batches in flight
+ * and one round trip.
+ */
+export const BLOCK_LINES = 40;
+
+/** A slice of a Transcript to translate, and the blocks it covers. */
+export interface TranslationWindow {
+  /** Line indices into the Transcript; `to` is exclusive. */
+  from: number;
+  to: number;
+  /** Every block this span covers, for the caller's "already asked" set. */
+  blocks: number[];
+}
+
+/**
+ * The next span of Lines worth translating while someone is listening at `lineIndex`,
+ * or null when the window around them is covered (ADR 0011).
+ *
+ * The Transcript is cut into fixed blocks so that "have we asked for this yet" is one
+ * number rather than a set of ranges to merge: seeking back and forth over the same
+ * minute must not produce a new, slightly different request each time. Three blocks
+ * are kept translated — the one being listened to, one ahead and one behind — and the
+ * one being listened to goes first, because that is the one on screen.
+ *
+ * `asked` is the caller's memory of what it has already sent, which is not the same
+ * question as what came back: a request that failed, or a model that skipped a Line,
+ * must not put this straight back in the queue.
+ */
+export function nextWindow(
+  lines: Transcript,
+  lineIndex: number,
+  asked: ReadonlySet<number>,
+  blockSize: number = BLOCK_LINES,
+): TranslationWindow | null {
+  const blocks = Math.ceil(lines.length / blockSize);
+  if (blocks === 0) return null;
+  // Before the first Line is a real position: it is what the screen shows before
+  // playback has started, and the reader is looking at the top of the Transcript.
+  const here = Math.min(
+    Math.max(0, Math.floor(Math.max(0, lineIndex) / blockSize)),
+    blocks - 1,
+  );
+
+  const missing = (block: number) =>
+    !asked.has(block) &&
+    lines
+      .slice(block * blockSize, (block + 1) * blockSize)
+      .some((line) => line.translation === undefined);
+
+  const first = [here, here + 1, here - 1].find(
+    (block) => block >= 0 && block < blocks && missing(block),
+  );
+  if (first === undefined) return null;
+
+  // Extended while the next block is missing too and still inside the window, so a
+  // Transcript with nothing translated goes out as one request rather than three.
+  let last = first;
+  while (last + 1 <= here + 1 && missing(last + 1)) last++;
+
+  return {
+    from: first * blockSize,
+    to: Math.min((last + 1) * blockSize, lines.length),
+    blocks: Array.from({ length: last - first + 1 }, (_, offset) => first + offset),
+  };
+}
 
 function translationPrompt(
   batch: { line: Line; index: number }[],

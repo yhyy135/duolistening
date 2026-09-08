@@ -7,7 +7,6 @@ const bare: Transcript = [
   { text: "one", startSec: 0, endSec: 5 },
   { text: "two", startSec: 5, endSec: 12.5 },
 ];
-const translated: Transcript = bare.map((line) => ({ ...line, translation: "译" }));
 
 const source = {
   kind: "podcast" as const,
@@ -55,12 +54,6 @@ function deps(over: Partial<ImportDeps> = {}) {
       onProgress(0.5);
       return bare;
     },
-    annotate: async (transcript, hooks) => {
-      called.push("annotate");
-      await hooks.onBatch(transcript);
-      hooks.onProgress(1);
-      return translated;
-    },
     fetchAudio: async () => {
       called.push("fetchAudio");
       return new Blob(["MP3"], { type: "audio/mpeg" });
@@ -85,14 +78,27 @@ test("a fresh import runs every step and ends ready", async () => {
   const resource = await startImport(d, { source, title: "ep" }, onProgress);
 
   // Audio first: the Transcript is made from the bytes that were kept, rather than
-  // from whatever the provider happened to fetch for itself.
-  assert.deepEqual(called, ["fetchAudio", "transcribe(3)", "annotate"]);
+  // from whatever the provider happened to fetch for itself. And it ends there —
+  // translation happens while listening now (ADR 0011), so an import is done once
+  // there are Lines to play against.
+  assert.deepEqual(called, ["fetchAudio", "transcribe(3)"]);
   assert.equal(resource.phase, "ready");
-  assert.deepEqual(store.state.transcript, translated);
+  assert.deepEqual(store.state.transcript, bare);
   assert.equal(store.state.audio?.type, "audio/mpeg");
   assert.deepEqual(
     seen.map((s) => s.phase),
-    ["fetching", "transcribing", "transcribing", "annotating", "annotating", "ready"],
+    ["fetching", "transcribing", "transcribing", "ready"],
+  );
+});
+
+test("an untranslated Transcript is what ready means", async () => {
+  const { deps: d, store } = deps();
+  await startImport(d, { source, title: "ep" }, () => {});
+
+  // Nothing here calls a Text Model at all: the import's only bill is transcription.
+  assert.equal(
+    store.state.transcript?.some((line) => line.translation),
+    false,
   );
 });
 
@@ -108,22 +114,7 @@ test("the Resource is on the shelf before any work starts", async () => {
   await startImport(d, { source, title: "ep" }, () => {});
 });
 
-test("the bare Transcript is saved before annotating can fail", async () => {
-  const { deps: d, store } = deps({
-    annotate: async () => {
-      throw new Error("rate limited");
-    },
-  });
-
-  const resource = await startImport(d, { source, title: "ep" }, () => {});
-
-  assert.equal(resource.phase, "failed");
-  // The expensive artifact survived the cheap step's failure — which is what makes
-  // the retry below skip transcription entirely.
-  assert.deepEqual(store.state.transcript, bare);
-});
-
-test("a retry after a translation failure never transcribes again", async () => {
+test("a retry never transcribes a Transcript that already exists", async () => {
   const store = fakeStore({ transcript: bare, audio: new Blob(["MP3"]) });
   const { deps: d, called } = deps({ store });
   const failed: Resource = {
@@ -139,7 +130,7 @@ test("a retry after a translation failure never transcribes again", async () => 
 
   const resource = await retryImport(d, failed, () => {});
 
-  assert.deepEqual(called, ["annotate"], "paid the transcription bill twice");
+  assert.deepEqual(called, [], "paid the transcription bill twice");
   assert.equal(resource.phase, "ready");
   assert.equal(resource.failureReason, undefined, "last time's reason cleared");
 });
@@ -161,7 +152,7 @@ test("a retry with a Transcript but no audio fetches only the audio", async () =
 
   // No transcribe: the Transcript already existed, and paying for it twice to
   // recover a missing download is exactly what a resume must not do.
-  assert.deepEqual(called, ["fetchAudio", "annotate"]);
+  assert.deepEqual(called, ["fetchAudio"]);
 });
 
 test("stored audio is never downloaded again", async () => {
@@ -204,31 +195,6 @@ test("a failure stays on the shelf, with its reason", async () => {
   assert.equal(resource.phase, "failed");
   assert.equal(resource.failureReason, "media file too large");
   assert.equal(store.state.resource?.phase, "failed", "still listed, not swept away");
-});
-
-test("translations are saved batch by batch, not only at the end", async () => {
-  const partial = bare.map((line, index) =>
-    index === 0 ? { ...line, translation: "半" } : line,
-  );
-  const store = fakeStore();
-  /** What the store actually held at the moment a batch landed. */
-  let seenMidway: Transcript | undefined;
-
-  const { deps: d } = deps({
-    store,
-    annotate: async (_t, hooks) => {
-      await hooks.onBatch(partial);
-      seenMidway = store.state.transcript;
-      return translated;
-    },
-  });
-
-  await startImport(d, { source, title: "ep" }, () => {});
-
-  // Someone listening sees the half-translated Transcript rather than waiting for
-  // the whole thing — which is what onBatch is for.
-  assert.deepEqual(seenMidway, partial);
-  assert.deepEqual(store.state.transcript, translated);
 });
 
 test("the duration comes from the Transcript, not the feed's guess", async () => {

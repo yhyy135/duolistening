@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Token, Transcript } from "../shared/model.ts";
-import { createAnnotator, type TranslationModel } from "./annotate.ts";
+import {
+  BLOCK_LINES,
+  createAnnotator,
+  nextWindow,
+  wantsJapanese,
+  type TranslationModel,
+} from "./annotate.ts";
 
 /** Answers every translation request with whatever `reply` makes of the prompt. */
 function stubTextModel(
@@ -191,39 +197,86 @@ test("returns new lines rather than editing the ones it was handed", async () =>
   assert.deepEqual(input, lines(2));
 });
 
-test("reports progress up to completion", async () => {
-  const seen: number[] = [];
-  const annotator = createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    batchSize: 10,
-  });
-
-  await annotator.annotate(lines(25), { ...japanese, onProgress: (f) => seen.push(f) });
-
-  assert.equal(seen.length, 3);
-  assert.equal(seen.at(-1), 1);
+test("the Japanese question is answered by every Line, not by a window of them", () => {
+  // The player annotates a window at a time (ADR 0011). Asking a window that happens
+  // to hold no kana would turn Tokens off for those Lines and on for their
+  // neighbours, so the caller settles it once over the whole Transcript.
+  const mixed: Transcript = [
+    { startSec: 0, endSec: 1, text: "OK" },
+    { startSec: 1, endSec: 2, text: "そうですね" },
+  ];
+  assert.equal(wantsJapanese(mixed), true);
+  assert.equal(wantsJapanese(mixed.slice(0, 1)), false, "the window would say no");
+  // A stated language is never second-guessed by the text.
+  assert.equal(wantsJapanese(mixed, "es"), false);
+  assert.equal(wantsJapanese([], "ja"), true);
 });
 
-test("hands onBatch a growing, fully-shaped Transcript as each batch lands", async () => {
-  const snapshots: Transcript[] = [];
-  // concurrency: 1 keeps batches landing in a fixed order, so the snapshots'
-  // lengths and content can be asserted without racing.
-  const annotator = createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    batchSize: 10,
-    concurrency: 1,
-  });
+// ---------------------------------------------------------------- nextWindow
 
-  const result = await annotator.annotate(lines(25), {
-    ...japanese,
-    onBatch: (partial) => void snapshots.push(partial),
-  });
+/** A Transcript with `translated` of its Lines already done, from the start. */
+const partly = (count: number, translated: number): Transcript =>
+  lines(count).map((line, index) =>
+    index < translated ? { ...line, translation: "译" } : line,
+  );
 
-  assert.equal(snapshots.length, 3);
-  // Every snapshot already covers every Line — only how many are translated grows.
-  assert.equal(snapshots[0]?.length, 25);
-  assert.equal(snapshots[0]?.filter((line) => line.translation).length, 10);
-  assert.equal(snapshots[1]?.filter((line) => line.translation).length, 20);
-  assert.equal(snapshots[2]?.filter((line) => line.translation).length, 25);
-  assert.deepEqual(snapshots.at(-1), result);
+const none = new Set<number>();
+
+test("the window starts where the listener is, and reaches one block ahead", () => {
+  const window = nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, none);
+
+  // Blocks 3 and 4: what is on screen, and what is about to be. Not block 2 — that
+  // one is behind, and comes on the next pass.
+  assert.deepEqual(window, { from: 120, to: 200, blocks: [3, 4] });
+});
+
+test("the block behind is picked up once the two ahead are covered", () => {
+  const asked = new Set([3, 4]);
+  const window = nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, asked);
+  assert.deepEqual(window, { from: 80, to: 120, blocks: [2] });
+
+  asked.add(2);
+  assert.equal(nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, asked), null);
+});
+
+test("a block already translated is never asked for again", () => {
+  // Reopening an episode whose first two blocks came back last time. Nothing is
+  // asked for at the top, because those two *are* the window there — the store is
+  // read before the model is, which is what makes the second visit free.
+  const reopened = partly(200, 2 * BLOCK_LINES);
+  assert.equal(nextWindow(reopened, 0, none), null);
+  // Listening on into the second block moves the window, and only then does the
+  // third go out.
+  assert.deepEqual(nextWindow(reopened, BLOCK_LINES + 5, none), {
+    from: 2 * BLOCK_LINES,
+    to: 3 * BLOCK_LINES,
+    blocks: [2],
+  });
+  assert.equal(nextWindow(partly(200, 200), 0, none), null, "nothing left to do");
+});
+
+test("before playback has started, the window is the top of the Transcript", () => {
+  // -1 is what `locate` answers before the first Line, which is where the screen
+  // opens — and it is a real position, not a missing one.
+  assert.deepEqual(nextWindow(partly(200, 0), -1, none)?.blocks, [0, 1]);
+});
+
+test("a short Transcript is one window, and an empty one is no work at all", () => {
+  assert.deepEqual(nextWindow(partly(5, 0), 0, none), { from: 0, to: 5, blocks: [0] });
+  assert.equal(nextWindow([], 0, none), null);
+});
+
+test("a listener past the last Line is not sent looking off the end", () => {
+  const window = nextWindow(partly(45, 0), 999, none);
+  assert.deepEqual(window, { from: 40, to: 45, blocks: [1] });
+});
+
+test("a Line the model skipped does not put its block back in the queue", () => {
+  // Asked, answered, and one entry missing from the reply. Retrying on every render
+  // would be an infinite request loop against a model that will skip it again.
+  const gappy = partly(40, 40).map((line, index) =>
+    index === 7 ? { ...line, translation: undefined } : line,
+  );
+  assert.equal(nextWindow(gappy, 0, new Set([0])), null);
+  assert.deepEqual(nextWindow(gappy, 0, none)?.blocks, [0], "a fresh visit tries once");
 });

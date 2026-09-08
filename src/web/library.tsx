@@ -114,9 +114,9 @@ export function LibraryScreen() {
           // it. Both need the same way out.
           const stalled =
             phase !== "ready" && (phase === "failed" || !driving.current.has(resource.id));
-          // Transcription is the slow, billed step; translation runs after and fills
-          // in as it goes (the Annotator's onBatch), so a Resource is worth opening as
-          // soon as it has lines, not only once every line is translated too.
+          // `annotating` is not a phase any import enters any more — translation
+          // happens in the player now (ADR 0011) — but a Resource left in it by the
+          // old pipeline still has its Lines and is still worth opening.
           const playable = phase === "ready" || phase === "annotating";
           return (
             <li key={resource.id} className={playable ? "ready" : ""}>
