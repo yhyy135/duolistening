@@ -91,10 +91,7 @@ export function LibraryScreen() {
     <main>
       <ImportBox
         settings={settings}
-        onStart={(begin) => {
-          // The id is only known once the Resource exists, so the shelf is refetched
-          // as soon as it does and progress is keyed by it from then on.
-          const id = crypto.randomUUID();
+        onStart={(id, begin) => {
           void drive(id, async (report) => {
             await begin(report);
           });
@@ -263,7 +260,10 @@ function ImportBox({
   onError,
 }: {
   settings: Settings | null;
-  onStart: (begin: (report: (p: ImportProgress) => void) => Promise<unknown>) => void;
+  onStart: (
+    id: string,
+    begin: (report: (p: ImportProgress) => void) => Promise<unknown>,
+  ) => void;
   onError: (message: string) => void;
 }) {
   const [url, setUrl] = useState("");
@@ -314,8 +314,13 @@ function ImportBox({
                   disabled={busy || !settings}
                   onClick={() => {
                     if (!settings) return;
-                    const deps = buildImportDeps(settings);
-                    onStart((report) =>
+                    // The id is decided here rather than inside the import, so progress
+                    // and the "is this tab driving it" check are keyed by the Resource
+                    // from the first tick. Keying them by anything else leaves the shelf
+                    // showing a Resume button beside a running import.
+                    const id = crypto.randomUUID();
+                    const deps = { ...buildImportDeps(settings), newId: () => id };
+                    onStart(id, (report) =>
                       startImport(
                         deps,
                         {
