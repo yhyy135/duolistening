@@ -2,7 +2,7 @@
 
 A listening-practice tool. Import a podcast episode, transcribe it with your own LLM keys, and study it through a lyrics-style transcript: the current line scrolls into view and highlights as it plays, your native-language translation sits under each line, and Japanese gets furigana and part-of-speech colouring.
 
-Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — eleven decisions, one paragraph each. 0008–0011 are the recent ones; they supersede 0001, 0003 and 0007 outright, and 0011 supersedes the part of 0005 that says when Tokens are computed.
+Read [CONTEXT.md](CONTEXT.md) for the domain vocabulary (**Resource**, **Transcript**, **Line**, **Word**, **Token**, **Suggestion**, **Library**) and use those words. Read [docs/adr/](docs/adr/) for why the architecture is shaped the way it is — fourteen decisions, a few paragraphs each. 0008–0011 rebuilt it: they supersede 0001, 0003 and 0007 outright, and 0011 supersedes the part of 0005 that says when Tokens are computed. 0012–0014 are what the browser half grew afterwards — an import that does not need an API key, where the recommendations come from, and why the manifest exists — and they supersede nothing.
 
 **Everything lives in the reader's browser.** No server, no accounts, no database, no `data/` directory. Settings — API keys included — the shelf, Transcripts and audio blobs are all in IndexedDB, which is what lets several people share one deployment while each pays for their own transcription (ADR 0008). The only thing deployed beside the static page is a Cloudflare Worker that proxies bytes (ADR 0009).
 
@@ -30,7 +30,7 @@ Node 22.18+ (unflagged type stripping).
 
 ```
 src/shared/  the model and the pure logic — model.ts, locate.ts, i18n.ts
-src/web/     everything else: the pipeline and the four screens
+src/web/     everything else: the pipeline and the three screens
 worker/      the byte proxy, deployed separately
 scripts/     what has to be generated into src/web/public before a build
 docs/adr/    why things are the way they are
@@ -115,7 +115,7 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 - `node --test` with `node:assert`. No test framework, and don't add one.
 - Test through a module's interface, not past it. Fakes are plain object literals or an injected `fetch`.
 - **Use the real thing where a stub would lie.** `japanese.test.ts` loads the actual kuromoji dictionary. `speech-to-text.test.ts`'s fake endpoint reports the duration a byte range really represents and cuts segments on its own boundaries, because a fake returning segments aligned to the chunk edge would pass against arithmetic that is wrong.
-- **There are no DOM tests**, deliberately — the logic worth testing is pure and lives below the components. IndexedDB and the browser half of kuromoji are driven in a real browser instead, with a throwaway page. That is not optional diligence: this refactor's last three bugs — a language table indexed by position, a placeholder still naming YouTube, and a dictionary hanging on a header — were all invisible to `tsc` and to 336 passing tests.
+- **There are no DOM tests**, deliberately — the logic worth testing is pure and lives below the components. IndexedDB and the browser half of kuromoji are driven in a real browser instead, with a throwaway page. That is not optional diligence: this refactor's last three bugs — a language table indexed by position, a placeholder still naming YouTube, and a dictionary hanging on a header — were all invisible to `tsc` and to 336 passing tests. The pattern held for the browser work that followed. A dialog rendering 576px wide inside a 375px viewport, a settings form overflowing at 320px, an interface stuck in a language the store had never been told about, and a Back button that did nothing because `confirm()` answered without showing itself: four real faults, none of which any amount of unit testing would have found, all of them one measurement away in a real browser.
 - A `ponytail:` comment marks a deliberate shortcut and names its ceiling. There are none left; the two that existed were a write mutex and a job queue, and both went with the server.
 
 ## Not yet done

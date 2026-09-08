@@ -118,7 +118,13 @@ already have.
 ## Importing
 
 Paste a podcast RSS feed into the one box on the library screen and pick an episode.
-It takes minutes, and the shelf shows the phase as it goes.
+It takes minutes, and the shelf shows the phase as it goes. Long-running shows answer
+with hundreds of episodes, so the list starts at ten and grows when you ask it to.
+
+If you have no feed in mind, the bottom of the library screen suggests shows in the
+language you are studying, from Apple's podcast directory. Picking one opens its feed
+in the same box. That list is fetched once a day and remembered, so the page reaches
+Apple twice a day at most — and only if you searched, ever again.
 
 Keep the tab open. The import runs in the page, so closing it abandons the import —
 the entry stays on the shelf and **Resume** picks up from whatever survived. The same
@@ -164,6 +170,12 @@ shaped the way it is.
   export is the only bridge between them.
 - The ask-AI popup asks one fixed question about one line and keeps no history, so
   re-opening it gives the same answer.
+- The recommendations reach Apple directly rather than through the proxy, so your
+  browser tells Apple which language you are studying, once a day. Cover art comes
+  from Apple's CDN too, which means blank squares offline.
+- Adding the page to an iPhone's home screen is what keeps its storage from being
+  cleared, but standalone web apps on iOS have a long history of losing audio when
+  minimised or locked. Test that on your own phone before relying on it.
 - Nothing has yet been run end to end on this architecture: every part is tested, but
   the deployed page and the deployed proxy have not imported a real episode together.
 

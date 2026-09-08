@@ -5,12 +5,16 @@ A self-hosted listening-practice tool: import a podcast episode, transcribe it w
 ## Language
 
 **Resource**:
-A podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it.
+A podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it. Its audio and its Transcript arrive separately and either can be missing: an episode imported before a Transcription Model was configured has audio and no Lines (ADR 0012), and one restored from a backup has Lines and no audio.
 _Avoid_: Track, episode, video, media, source
 
 **Library**:
 Everything the user has imported, kept in their browser's IndexedDB until they delete it by hand. Deleting an entry takes its Transcript and audio with it. The landing screen: pick an entry and drop straight back into where you left off.
 _Avoid_: History (implies an event log that ages out — a Library entry only leaves when deleted), collection, shelf
+
+**Suggestion**:
+A podcast _show_ offered to the reader before anything is imported — its title, its cover art, and the feed URL an import would start from. Never part of the Library: picking one only opens that feed's episode list, and a Resource appears if the reader then chooses an episode from it. Comes from Apple's search endpoint (ADR 0013), refreshed once a day.
+_Avoid_: Recommendation (the section is headed that, but one row of it is a Suggestion), result, hit, podcast (ambiguous between a show and an episode)
 
 **Transcript**:
 The ordered sequence of Lines generated for a Resource, covering its full duration.
