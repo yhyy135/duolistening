@@ -29,6 +29,60 @@ import { listModels } from "./text-model.ts";
 
 type SlotField = "textModel" | "transcriptionModel";
 
+interface ProviderPreset {
+  id: string;
+  label: string;
+  baseUrl: string;
+  /** Where this provider hands out a key. Absent for one that needs none (Ollama). */
+  keyUrl?: string;
+  /** False for a provider with no speech-to-text model — left off the Transcription
+      Model slot's list entirely rather than offered and left to fail there. Default
+      true. */
+  transcription?: boolean;
+}
+
+/**
+ * Quick-fill for the Base URL field. Not part of `ModelSlot` — nothing about which
+ * preset was picked is stored, so the dropdown reverse-matches the current `baseUrl`
+ * against this list and falls back to "custom" when it was typed by hand or edited
+ * since (e.g. Cloudflare's ACCOUNT_ID placeholder).
+ */
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: "openai",
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    keyUrl: "https://openrouter.ai/keys",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com/v1",
+    keyUrl: "https://platform.deepseek.com/api_keys",
+    transcription: false,
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    keyUrl: "https://console.groq.com/keys",
+  },
+  {
+    id: "cloudflare",
+    label: "Cloudflare Workers AI",
+    // OpenAI-compatible since 2024; the account id has to be filled in by hand.
+    baseUrl: "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1",
+    keyUrl: "https://dash.cloudflare.com/profile/api-tokens",
+  },
+  { id: "ollama", label: "Ollama", baseUrl: "http://localhost:11434/v1" },
+];
+
 const EMPTY_SLOT: ModelSlot = { baseUrl: "", apiKey: "", model: "" };
 const BLANK: Settings = {
   textModel: EMPTY_SLOT,
@@ -227,7 +281,6 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           field="transcriptionModel"
           legend={t("settings.transcriptionModel")}
           modelHint="whisper-1"
-          hint={t("settings.groqHint")}
           slot={settings.transcriptionModel}
           check={check?.transcriptionModel}
           modelOptions={modelOptions.transcriptionModel}
@@ -290,7 +343,6 @@ function Slot({
   field,
   legend,
   modelHint,
-  hint,
   slot,
   check,
   modelOptions,
@@ -302,8 +354,6 @@ function Slot({
   field: SlotField;
   legend: string;
   modelHint: string;
-  /** A free-form tip shown under the legend — where to find a slot worth trying. */
-  hint?: string;
   slot: ModelSlot;
   check: SlotCheck | undefined;
   /** Model ids from the last successful fetch, offered as the Model field's dropdown. */
@@ -315,18 +365,58 @@ function Slot({
 }) {
   const datalistId = `models-${field}`;
   const t = useT();
+  // "Custom" is not a preset with a baseUrl of its own, so picking it is otherwise a
+  // no-op: the dropdown's value is derived from `slot.baseUrl`, and with nothing
+  // changed it immediately reverse-matches back to whichever preset that URL still
+  // belongs to. This is the one bit of provider choice that has to live outside
+  // `slot` — sticky until a real preset (or another blank slot) overrides it.
+  const [forcedCustom, setForcedCustom] = useState(false);
+  // DeepSeek etc: a preset with no speech-to-text model of its own has nothing to
+  // offer the Transcription Model slot, so it is left out of that list entirely
+  // rather than offered and left to fail against it.
+  const presets = PROVIDER_PRESETS.filter(
+    (preset) => field !== "transcriptionModel" || preset.transcription !== false,
+  );
+  const matched = presets.find((preset) => preset.baseUrl === slot.baseUrl);
+  const activeProvider = forcedCustom ? undefined : matched;
   return (
     <fieldset>
       <legend>{legend}</legend>
-      {hint && <p className="hint">{hint}</p>}
+      <label>
+        {t("settings.provider")}
+        <select
+          value={activeProvider?.id ?? "custom"}
+          onChange={(event) => {
+            if (event.target.value === "custom") {
+              setForcedCustom(true);
+              return;
+            }
+            const preset = presets.find((candidate) => candidate.id === event.target.value);
+            if (!preset) return;
+            setForcedCustom(false);
+            onChange({ ...slot, baseUrl: preset.baseUrl });
+          }}
+        >
+          {presets.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+          <option value="custom">{t("settings.providerCustom")}</option>
+        </select>
+      </label>
       <label>
         {t("settings.baseUrl")}
         <input
           value={slot.baseUrl}
           placeholder="https://api.openai.com/v1"
-          onChange={(event) => onChange({ ...slot, baseUrl: event.target.value })}
+          onChange={(event) => {
+            setForcedCustom(false);
+            onChange({ ...slot, baseUrl: event.target.value });
+          }}
         />
       </label>
+      <ProviderHint field={field} provider={activeProvider} />
       <label>
         {t("settings.apiKey")}
         <SecretInput value={slot.apiKey} onChange={(apiKey) => onChange({ ...slot, apiKey })} />
@@ -374,6 +464,52 @@ function Slot({
         </p>
       )}
     </fieldset>
+  );
+}
+
+/** The host to send someone to, stated plainly rather than as a full URL — the same
+    shorthand `settings.groqHint` already used for console.groq.com. */
+function hostOf(url: string): string {
+  return new URL(url).hostname;
+}
+
+/**
+ * Guidance for getting a key out of whichever provider is active, mirroring
+ * mastersgo.cc's per-provider "create a key" links. One shape for every provider
+ * that has a `keyUrl`: a line naming where the key comes from, then the link on its
+ * own line. Groq's transcription slot and Cloudflare add one short tip above it —
+ * the model Whisper actually wants, and the account id the base URL still needs —
+ * but the key instructions underneath stay the same line, not a rewritten paragraph.
+ */
+function ProviderHint({
+  field,
+  provider,
+}: {
+  field: SlotField;
+  provider: ProviderPreset | undefined;
+}) {
+  const t = useT();
+  if (!provider) return null;
+  if (provider.id === "ollama") return <p className="hint">{t("settings.ollamaHint")}</p>;
+  return (
+    <>
+      {provider.id === "cloudflare" && <p className="hint">{t("settings.cloudflareHint")}</p>}
+      {provider.id === "groq" && field === "transcriptionModel" && (
+        <p className="hint">{t("settings.groqHint")}</p>
+      )}
+      {provider.keyUrl && (
+        <p className="hint">
+          {t("settings.getApiKey", {
+            host: hostOf(provider.keyUrl),
+            action: t("settings.fetchModels"),
+          })}
+          <br />
+          <a href={provider.keyUrl} target="_blank" rel="noreferrer">
+            {t("settings.getApiKeyLink")}
+          </a>
+        </p>
+      )}
+    </>
   );
 }
 

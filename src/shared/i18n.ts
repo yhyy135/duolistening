@@ -93,8 +93,15 @@ const en = {
   "settings.autoDetect": "Auto-detect",
   "settings.textModel": "Text Model — translation and the ask-AI popup",
   "settings.transcriptionModel": "Transcription Model — speech to text",
-  "settings.groqHint":
-    "Groq runs Whisper for free: try https://api.groq.com/openai/v1 with model whisper-large-v3-turbo — get a key at console.groq.com.",
+  "settings.provider": "Provider",
+  "settings.providerCustom": "Custom",
+  "settings.cloudflareHint":
+    "Cloudflare Workers AI speaks the OpenAI shape too: replace ACCOUNT_ID in the base URL with yours, and use a model like @cf/meta/llama-3.1-8b-instruct.",
+  "settings.groqHint": "Groq runs Whisper for free — try model whisper-large-v3-turbo.",
+  "settings.getApiKey":
+    "Create an API key at {host} and paste it below, then click “{action}” to pick one.",
+  "settings.getApiKeyLink": "Create an API key →",
+  "settings.ollamaHint": "Ollama runs on your own machine — no API key needed.",
   "settings.baseUrl": "Base URL",
   "settings.apiKey": "API key",
   "settings.model": "Model",
@@ -195,8 +202,15 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "自动识别",
     "settings.textModel": "文本模型 — 翻译与 AI 问答",
     "settings.transcriptionModel": "转写模型 — 语音转文字",
-    "settings.groqHint":
-      "Groq 免费提供 Whisper：base URL 填 https://api.groq.com/openai/v1，模型填 whisper-large-v3-turbo，到 console.groq.com 申请密钥。",
+    "settings.provider": "服务商",
+    "settings.providerCustom": "自定义",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI 也兼容 OpenAI 格式：把 base URL 里的 ACCOUNT_ID 换成你自己的账号 ID，模型名可以用 @cf/meta/llama-3.1-8b-instruct 之类。",
+    "settings.groqHint": "Groq 免费提供 Whisper，推荐使用 whisper-large-v3-turbo 模型。",
+    "settings.getApiKey":
+      "在 {host} 创建 API Key 并填入下方，然后点击「{action}」选择模型即可。",
+    "settings.getApiKeyLink": "前往创建 API Key →",
+    "settings.ollamaHint": "Ollama 运行在你自己的电脑上，不需要 API Key。",
     "settings.baseUrl": "Base URL",
     "settings.apiKey": "API 密钥",
     "settings.model": "模型",
@@ -291,8 +305,15 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "自動辨識",
     "settings.textModel": "文字模型 — 翻譯與 AI 問答",
     "settings.transcriptionModel": "轉寫模型 — 語音轉文字",
-    "settings.groqHint":
-      "Groq 免費提供 Whisper：base URL 填 https://api.groq.com/openai/v1，模型填 whisper-large-v3-turbo，到 console.groq.com 申請金鑰。",
+    "settings.provider": "服務商",
+    "settings.providerCustom": "自訂",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI 也相容 OpenAI 格式：把 base URL 裡的 ACCOUNT_ID 換成你自己的帳號 ID，模型名可以用 @cf/meta/llama-3.1-8b-instruct 之類。",
+    "settings.groqHint": "Groq 免費提供 Whisper，推薦使用 whisper-large-v3-turbo 模型。",
+    "settings.getApiKey":
+      "在 {host} 建立 API Key 並貼到下方，然後點擊「{action}」選擇模型即可。",
+    "settings.getApiKeyLink": "前往建立 API Key →",
+    "settings.ollamaHint": "Ollama 執行在你自己的電腦上，不需要 API Key。",
     "settings.baseUrl": "Base URL",
     "settings.apiKey": "API 金鑰",
     "settings.model": "模型",
@@ -389,8 +410,16 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "自動判定",
     "settings.textModel": "テキストモデル — 翻訳と AI 質問",
     "settings.transcriptionModel": "文字起こしモデル — 音声認識",
+    "settings.provider": "プロバイダー",
+    "settings.providerCustom": "カスタム",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI も OpenAI 形式で話せます：base URL の ACCOUNT_ID を自分のアカウント ID に置き換え、モデルは @cf/meta/llama-3.1-8b-instruct のようなものを使ってください。",
     "settings.groqHint":
-      "Groq なら Whisper を無料で使えます：https://api.groq.com/openai/v1 とモデル whisper-large-v3-turbo、キーは console.groq.com で取得。",
+      "Groq なら Whisper を無料で使えます。おすすめモデルは whisper-large-v3-turbo です。",
+    "settings.getApiKey":
+      "{host} で API キーを作成して下に貼り付け、「{action}」をクリックしてモデルを選んでください。",
+    "settings.getApiKeyLink": "API キーを作成 →",
+    "settings.ollamaHint": "Ollama は自分のマシン上で動くので、API キーは不要です。",
     "settings.baseUrl": "Base URL",
     "settings.apiKey": "API キー",
     "settings.model": "モデル",
@@ -487,8 +516,16 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "자동 감지",
     "settings.textModel": "텍스트 모델 — 번역과 AI 질문",
     "settings.transcriptionModel": "전사 모델 — 음성 인식",
+    "settings.provider": "제공업체",
+    "settings.providerCustom": "사용자 지정",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI도 OpenAI 형식을 지원합니다: base URL의 ACCOUNT_ID를 본인 계정 ID로 바꾸고, 모델은 @cf/meta/llama-3.1-8b-instruct 같은 것을 사용하세요.",
     "settings.groqHint":
-      "Groq는 Whisper를 무료로 제공합니다: https://api.groq.com/openai/v1 와 모델 whisper-large-v3-turbo, 키는 console.groq.com 에서 받으세요.",
+      "Groq는 Whisper를 무료로 제공합니다. 추천 모델은 whisper-large-v3-turbo입니다.",
+    "settings.getApiKey":
+      "{host}에서 API 키를 만들어 아래에 붙여넣은 다음 “{action}”을 눌러 모델을 선택하세요.",
+    "settings.getApiKeyLink": "API 키 만들기 →",
+    "settings.ollamaHint": "Ollama는 내 컴퓨터에서 실행되므로 API 키가 필요 없습니다.",
     "settings.baseUrl": "Base URL",
     "settings.apiKey": "API 키",
     "settings.model": "모델",
@@ -586,8 +623,16 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "Detección automática",
     "settings.textModel": "Modelo de texto — traducción y preguntas a la IA",
     "settings.transcriptionModel": "Modelo de transcripción — voz a texto",
+    "settings.provider": "Proveedor",
+    "settings.providerCustom": "Personalizado",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI también habla el formato de OpenAI: cambia ACCOUNT_ID en la URL base por el tuyo, y usa un modelo como @cf/meta/llama-3.1-8b-instruct.",
     "settings.groqHint":
-      "Groq ofrece Whisper gratis: prueba https://api.groq.com/openai/v1 con el modelo whisper-large-v3-turbo — consigue una clave en console.groq.com.",
+      "Groq ofrece Whisper gratis — prueba el modelo whisper-large-v3-turbo.",
+    "settings.getApiKey":
+      "Crea una clave de API en {host}, pégala abajo y luego pulsa «{action}» para elegir un modelo.",
+    "settings.getApiKeyLink": "Crear una clave de API →",
+    "settings.ollamaHint": "Ollama funciona en tu propio equipo — no hace falta clave de API.",
     "settings.baseUrl": "URL base",
     "settings.apiKey": "Clave de API",
     "settings.model": "Modelo",
@@ -685,8 +730,16 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "Détection automatique",
     "settings.textModel": "Modèle de texte — traduction et questions à l'IA",
     "settings.transcriptionModel": "Modèle de transcription — reconnaissance vocale",
+    "settings.provider": "Fournisseur",
+    "settings.providerCustom": "Personnalisé",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI parle aussi le format OpenAI : remplacez ACCOUNT_ID dans l'URL de base par le vôtre, et utilisez un modèle comme @cf/meta/llama-3.1-8b-instruct.",
     "settings.groqHint":
-      "Groq propose Whisper gratuitement : essayez https://api.groq.com/openai/v1 avec le modèle whisper-large-v3-turbo — clé sur console.groq.com.",
+      "Groq propose Whisper gratuitement — essayez le modèle whisper-large-v3-turbo.",
+    "settings.getApiKey":
+      "Créez une clé API sur {host}, collez-la ci-dessous, puis cliquez sur « {action} » pour en choisir un.",
+    "settings.getApiKeyLink": "Créer une clé API →",
+    "settings.ollamaHint": "Ollama tourne sur votre propre machine — aucune clé API requise.",
     "settings.baseUrl": "URL de base",
     "settings.apiKey": "Clé d'API",
     "settings.model": "Modèle",
@@ -784,8 +837,17 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.autoDetect": "Automatisch erkennen",
     "settings.textModel": "Textmodell — Übersetzung und KI-Fragen",
     "settings.transcriptionModel": "Transkriptionsmodell — Sprache zu Text",
+    "settings.provider": "Anbieter",
+    "settings.providerCustom": "Benutzerdefiniert",
+    "settings.cloudflareHint":
+      "Cloudflare Workers AI spricht ebenfalls das OpenAI-Format: ersetze ACCOUNT_ID in der Basis-URL durch deine eigene, und nutze ein Modell wie @cf/meta/llama-3.1-8b-instruct.",
     "settings.groqHint":
-      "Groq bietet Whisper kostenlos: https://api.groq.com/openai/v1 mit dem Modell whisper-large-v3-turbo — Schlüssel auf console.groq.com.",
+      "Groq bietet Whisper kostenlos — probier das Modell whisper-large-v3-turbo.",
+    "settings.getApiKey":
+      "Erstelle einen API-Schlüssel bei {host}, füge ihn unten ein und klicke dann auf „{action}“, um eins auszuwählen.",
+    "settings.getApiKeyLink": "API-Schlüssel erstellen →",
+    "settings.ollamaHint":
+      "Ollama läuft auf deinem eigenen Rechner — kein API-Schlüssel nötig.",
     "settings.baseUrl": "Basis-URL",
     "settings.apiKey": "API-Schlüssel",
     "settings.model": "Modell",
