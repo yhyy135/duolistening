@@ -54,6 +54,42 @@ export class TranscriptionError extends Error {
   }
 }
 
+/**
+ * What an uploaded episode has to be called, from the type the store corrected it to.
+ *
+ * These endpoints decide the audio format from the filename's extension and from
+ * nothing else. Measured against Groq: the same WAV bytes are refused outright as
+ * `episode` — 400, `unsupported_audio_format`, "file must be one of the following
+ * types" — accepted as `episode.wav`, and *also* accepted and correctly transcribed
+ * as `episode.mp3`. So the extension is a gate that the decoder behind it does not
+ * consult; passing it is mandatory and being right about it is not.
+ *
+ * Being right about it anyway. `.mp3` would clear the gate for everything, and it is
+ * the same lie that `audioType` exists to stop telling — the next provider may be the
+ * one that dispatches on it rather than sniffing.
+ */
+const EXTENSIONS: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "m4a",
+  "audio/ogg": "ogg",
+  "audio/opus": "opus",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/flac": "flac",
+  "audio/webm": "webm",
+  "video/mp4": "mp4",
+};
+
+export function uploadName(type: string): string {
+  const bare = type.split(";")[0]?.trim().toLowerCase() ?? "";
+  // `audioType` answers "" when neither the magic bytes nor the server identified
+  // the file. A podcast enclosure that nothing recognised is an mp3 in practice, and
+  // the alternative is refusing to try.
+  return `episode.${EXTENSIONS[bare] ?? "mp3"}`;
+}
+
 export function createSpeechToText(options: SpeechToTextOptions) {
   const { slot } = options;
   const doFetch = options.fetch ?? globalThis.fetch;
@@ -65,7 +101,7 @@ export function createSpeechToText(options: SpeechToTextOptions) {
   function post(source: Source, language: LanguageCode | undefined, withWords: boolean) {
     const form = new FormData();
     if ("url" in source) form.set("url", source.url);
-    else form.set("file", source.blob, "episode");
+    else form.set("file", source.blob, uploadName(source.blob.type));
     form.set("model", slot.model);
     // Omitted when the reader has not said what they are studying — every
     // OpenAI-compatible endpoint detects the language itself in that case.

@@ -5,6 +5,7 @@ import {
   TranscriptionError,
   createSpeechToText,
   toSegments,
+  uploadName,
   type VerboseJson,
 } from "./speech-to-text.ts";
 
@@ -75,6 +76,7 @@ test("transcribeBlob uploads the bytes, so the Transcript describes what was kep
   const sent = fetch.forms[0]?.get("file") as File;
   assert.equal(await sent.text(), "MP3BYTES");
   assert.equal(sent.type, "audio/mpeg");
+  assert.equal(sent.name, "episode.mp3", "the extension is what the endpoint reads");
   assert.equal(fetch.forms[0]?.has("url"), false);
   assert.equal(fetch.forms[0]?.get("model"), "whisper-large-v3-turbo");
   assert.equal(result.durationSec, 928.57);
@@ -231,4 +233,20 @@ test("a segment missing its timestamps is dropped, not defaulted to zero", () =>
     segments.map((s) => s.text),
     ["keep"],
   );
+});
+
+test("an upload is named for its type, because the extension is the format check", () => {
+  // Measured against Groq: the same bytes are refused as `episode` with 400
+  // `unsupported_audio_format` — "file must be one of the following types:
+  // [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm]" — and accepted as `episode.wav`.
+  // A name with no extension at all is the shape that failed a real import.
+  assert.equal(uploadName("audio/mpeg"), "episode.mp3");
+  assert.equal(uploadName("audio/mp4"), "episode.m4a");
+  assert.equal(uploadName("audio/ogg"), "episode.ogg");
+  assert.equal(uploadName("audio/wav; codecs=1"), "episode.wav", "parameters are ignored");
+  assert.equal(uploadName("AUDIO/FLAC"), "episode.flac");
+  // `audioType` answers "" when nothing identified the file. Guessing mp3 beats
+  // sending a name the endpoint will refuse before it looks at the bytes.
+  assert.equal(uploadName(""), "episode.mp3");
+  assert.equal(uploadName("application/octet-stream"), "episode.mp3");
 });
