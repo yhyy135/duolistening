@@ -551,6 +551,16 @@ function ImportBox({
     if (Object.keys(found).length > 0) setClipped((current) => ({ ...current, ...found }));
   }, [feed, shown]);
 
+  // Back to the top for every new list. The dialog keeps its list mounted between
+  // openings, so the second show would otherwise open part-way down, wherever whoever
+  // scrolled the first one left it. It has to happen here rather than beside the other
+  // resets in `listEpisodes`: a closed <dialog> is `display: none`, a scroll written to
+  // a hidden element does not stick, and the browser hands back the old offset when it
+  // is shown again — measured, 107px into a list that had just been replaced.
+  useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [feed]);
+
   // The next page arrives when the reader reaches the end of this one. An observer
   // rather than a scroll handler on the list: it also fires when the sentinel is
   // already on screen, and a feed of twenty-two episodes on a tall window never
