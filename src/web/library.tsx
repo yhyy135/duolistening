@@ -182,20 +182,36 @@ export function LibraryScreen() {
                   {phase === "failed" ? t("library.retry") : t("library.resumeImport")}
                 </button>
               )}
-              {/* Two clicks on one button rather than confirm(): that dialog blocks
-                  the page, cannot be styled to match either theme, and reads as a
-                  browser error. Focus leaving the button disarms it. */}
-              <button
-                className="ghost"
-                onBlur={() => setConfirming(null)}
-                onClick={() =>
-                  confirming === resource.id
-                    ? void remove(resource)
-                    : setConfirming(resource.id)
-                }
-              >
-                {confirming === resource.id ? t("common.sure") : t("common.delete")}
-              </button>
+              {/* Two clicks rather than confirm(): that dialog blocks the page, cannot
+                  be styled to match either theme, and reads as a browser error.
+                  The second click is deliberately not in the same place as the first.
+                  Delete sits at the end of the row, so arming puts Cancel there — under
+                  whatever just clicked Delete — and Confirm to its left, where nothing
+                  has been clicked yet. A double-click, the mis-operation this is
+                  actually guarding against, therefore lands on Cancel. Cancel also
+                  takes focus, so a reflexive Enter goes the same safe way. */}
+              {confirming === resource.id ? (
+                // One blur handler for the pair, not one each: focus moving from Cancel
+                // to Confirm is still focus inside the confirmation, and disarming on it
+                // would make the pair impossible to reach with a keyboard.
+                <span
+                  className="confirm"
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) setConfirming(null);
+                  }}
+                >
+                  <button className="ghost danger" onClick={() => void remove(resource)}>
+                    {t("common.sure")}
+                  </button>
+                  <button className="ghost" autoFocus onClick={() => setConfirming(null)}>
+                    {t("common.cancel")}
+                  </button>
+                </span>
+              ) : (
+                <button className="ghost" onClick={() => setConfirming(resource.id)}>
+                  {t("common.delete")}
+                </button>
+              )}
             </li>
           );
         })}

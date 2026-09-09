@@ -344,6 +344,25 @@ main {
   color: var(--bad);
 }
 
+/* The armed pair, sitting where the single Delete button was. Gapless so the two read
+   as one control that replaced one button, and so Cancel keeps the row's right edge —
+   which is the whole point of the arrangement, since that is where the finger is. */
+.shelf .confirm {
+  display: flex;
+  flex: none;
+}
+/* The destructive half says so. It is the one of the two that is not under the cursor,
+   and colour is the second thing telling them apart after position. */
+.shelf .confirm .danger {
+  color: var(--bad);
+}
+/* Every `.ghost` in this app goes `--bad` on hover, which is right for a lone Delete
+   and wrong for the button whose whole job is to be the safe way out — it would wear
+   the destructive colour while sitting beside the destructive button. */
+.shelf .confirm .ghost:not(.danger):hover:not(:disabled) {
+  color: var(--ink);
+}
+
 /* An import runs for minutes. A percentage reads at a glance only once you stop to
    read it; a bar reads while scrolling past. */
 .shelf progress {

@@ -25,6 +25,7 @@ const en = {
   "common.saved": "Saved",
   "common.delete": "Delete",
   "common.sure": "Sure?",
+  "common.cancel": "Cancel",
   "common.close": "Close",
 
   "phase.queued": "Queued",
@@ -151,6 +152,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "已保存",
     "common.delete": "删除",
     "common.sure": "确定？",
+    "common.cancel": "取消",
     "common.close": "关闭",
 
     "phase.queued": "排队中",
@@ -268,6 +270,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "已儲存",
     "common.delete": "刪除",
     "common.sure": "確定？",
+    "common.cancel": "取消",
     "common.close": "關閉",
 
     "phase.queued": "排隊中",
@@ -385,6 +388,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "保存しました",
     "common.delete": "削除",
     "common.sure": "本当に？",
+    "common.cancel": "キャンセル",
     "common.close": "閉じる",
 
     "phase.queued": "待機中",
@@ -506,6 +510,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "저장됨",
     "common.delete": "삭제",
     "common.sure": "삭제할까요?",
+    "common.cancel": "취소",
     "common.close": "닫기",
 
     "phase.queued": "대기 중",
@@ -627,6 +632,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "Guardado",
     "common.delete": "Eliminar",
     "common.sure": "¿Seguro?",
+    "common.cancel": "Cancelar",
     "common.close": "Cerrar",
 
     "phase.queued": "En cola",
@@ -749,6 +755,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "Enregistré",
     "common.delete": "Supprimer",
     "common.sure": "Sûr ?",
+    "common.cancel": "Annuler",
     "common.close": "Fermer",
 
     "phase.queued": "En attente",
@@ -871,6 +878,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saved": "Gespeichert",
     "common.delete": "Löschen",
     "common.sure": "Sicher?",
+    "common.cancel": "Abbrechen",
     "common.close": "Schließen",
 
     "phase.queued": "In der Warteschlange",
