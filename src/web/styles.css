@@ -276,41 +276,133 @@ main {
   margin-top: 0.6rem;
   flex-wrap: wrap;
 }
-.import input {
+
+/* Shared by the feed box above and the podcast search below — both are one text input
+   with a ✕ inside its right edge, and the second one is not a copy of the first.
+   A flex container of one, not a plain wrapper: the touch floor further down can make
+   the button next to this taller than the input's own height, and form's stretch only
+   reaches direct children. Nesting the flex context is what lets the input stretch to
+   match it — which is also what keeps the ✕, centred on this box, centred on the
+   input itself. */
+.search-field {
+  position: relative;
+  display: flex;
   flex: 1;
+  min-width: 0;
+}
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  /* Room for the ✕ so a long URL never runs under it. */
+  padding-right: 2.2rem;
+}
+/* A small round glyph button living inside another control: the ✕ in a text field,
+   the ⋯ in an episode title. The 44px touch floor further down is sized for a control
+   the flex row can grow to fit; these have to fit inside something that keeps its own
+   height, so they stay small — a class beats that rule's specificity outright, no
+   !important needed. Position is per-use, below. */
+.search-field .clear,
+.episodes .expand {
+  position: absolute;
+  width: 1.6em;
+  height: 1.6em;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--dim);
+  border-radius: 50%;
+  line-height: 1;
+}
+.search-field .clear:hover:not(:disabled),
+.episodes .expand:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.search-field .clear {
+  top: 50%;
+  right: 0.3rem;
+  transform: translateY(-50%);
 }
 
-.episodes ul,
 .shelf {
   list-style: none;
   margin: 1rem 0;
   padding: 0;
 }
-.episodes li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  padding: 0.15rem 0;
+
+/* The episode picker's table. `table-layout: fixed` is what lets a title truncate at
+   all — an auto table widens to its longest cell instead, and one publisher's
+   forty-word episode title then pushes the duration column off the right of a phone. */
+.episodes {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
 }
-.episodes button {
+.episodes th {
+  /* The rows scroll under it, so it says which column is which the whole way down. */
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--dim);
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.episodes th.dur,
+.episodes td.dur {
+  width: 4rem;
+  text-align: right;
+}
+.episodes td {
+  vertical-align: top;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.episodes td.title {
+  padding-right: 0.6rem;
+}
+/* Inline-block with room left for the ⋯ rather than a block filling the cell: the ⋯
+   then sits immediately after the title instead of floating at the far right of a
+   fixed column, which on a short title left it stranded in the middle of the row. */
+.episodes .pick {
+  display: inline-block;
+  max-width: calc(100% - 1.9rem);
+  vertical-align: middle;
+  padding: 0;
   background: none;
   text-align: left;
-  padding: 0.2em 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.episodes button:hover:not(:disabled) {
+.episodes .pick:hover:not(:disabled) {
   background: none;
   color: var(--accent);
 }
-/* Not one of the episode rows above, so it takes its padding back and reads as the
-   control it is rather than an eleventh title. */
-.episodes button.more {
-  padding: 0.4em 0.9em;
-  color: var(--dim);
-  background: var(--line);
+/* What the ⋯ toggles: the same title with nothing cut off it. */
+.episodes tr.open .pick {
+  white-space: normal;
+  overflow: visible;
 }
-.episodes button.more:hover:not(:disabled) {
-  color: var(--ink);
-  background: var(--hover);
+.episodes .expand {
+  position: static;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.episodes .when {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+.episodes td.dur {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .shelf li {
@@ -435,50 +527,6 @@ main {
   gap: 0.5rem;
   margin-top: 0.4rem;
 }
-/* A flex container of one, not a plain wrapper: the touch floor below can make the
-   Search button next to this taller than the input's own height, and form's stretch
-   only reaches direct children. Nesting the flex context is what lets the input
-   stretch to match it the same way it did before this had a wrapper at all — which
-   is also what keeps the ✕, centred on this box, centred on the input itself. */
-.discover .search-field {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
-.discover .search-field input {
-  flex: 1;
-  min-width: 0;
-  /* Room for the ✕ so a long search term never runs under it. */
-  padding-right: 2.2rem;
-}
-/* The 44px touch floor further down is sized for a control the flex row can grow
-   to fit; this one has to fit inside a text input that keeps its own height, so it
-   stays small — a class beats that rule's specificity outright, no !important
-   needed. */
-.discover .search-field .clear {
-  position: absolute;
-  top: 50%;
-  right: 0.3rem;
-  transform: translateY(-50%);
-  width: 1.6em;
-  height: 1.6em;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  color: var(--dim);
-  border-radius: 50%;
-  line-height: 1;
-}
-.discover .search-field .clear:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--ink);
-}
-
 .suggestions {
   list-style: none;
   margin: 0.8rem 0 0;
@@ -1096,13 +1144,28 @@ button.ask {
    itself to 500 characters of monospace and the import to an empty textarea's default
    columns — 343px against 246px on the same phone, from the two buttons next to each
    other. */
-.transfer-dialog {
+.transfer-dialog,
+.episodes-dialog {
   width: min(36rem, 100% - 2rem);
+}
+/* The list is the part that grows without a bound — several hundred episodes, ten at
+   a time — so it is the part that scrolls, and the show's name, the header row and the
+   buttons stay where they are. */
+.episodes-dialog {
+  max-height: 80vh;
+}
+.episodes-dialog .list {
+  overflow: auto;
+  margin-bottom: 0.8rem;
+  /* Room for a scrollbar. macOS draws an overlay one straight over the durations,
+     which are the one column with nothing to its right to give way. */
+  padding-right: 0.4rem;
+  scrollbar-gutter: stable;
 }
 /* Muted, not `--bad`. It was red when it warned that the string carries live keys;
    it now says what the string is and where to paste it, and a red block of that in
    one dialog and nothing in the other is what made the pair look unrelated. */
-.transfer-dialog .note {
+.ask-dialog .note {
   margin: 0 0 0.8rem;
   font-size: 0.85rem;
   color: var(--dim);
@@ -1120,7 +1183,7 @@ button.ask {
   resize: vertical;
   margin-bottom: 0.8rem;
 }
-.transfer-dialog .actions {
+.ask-dialog .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

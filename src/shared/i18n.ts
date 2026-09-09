@@ -49,6 +49,12 @@ const en = {
   "library.working": "Working…",
   "library.showMore": "Show {count} more",
   "library.autoLanguage": "auto",
+  "library.clearUrl": "Clear the link",
+  "library.pickEpisode": "Pick an episode to import",
+  "library.columnTitle": "Episode title",
+  "library.columnDuration": "Duration",
+  "library.fullTitle": "Show the full title",
+  "library.feedFailed": "Could not load the episode list: {reason}",
 
   "discover.title": "Recommended podcasts",
   "discover.subtitle":
@@ -176,6 +182,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "处理中…",
     "library.showMore": "再显示 {count} 集",
     "library.autoLanguage": "自动",
+    "library.clearUrl": "清空链接",
+    "library.pickEpisode": "选择要导入的单集",
+    "library.columnTitle": "节目标题",
+    "library.columnDuration": "时长",
+    "library.fullTitle": "查看完整标题",
+    "library.feedFailed": "获取节目列表失败：{reason}",
 
     "discover.title": "推荐播客",
     "discover.subtitle": "以你正在学的语言播出的节目，来自 Apple Podcasts。每天更新一次。",
@@ -294,6 +306,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "處理中…",
     "library.showMore": "再顯示 {count} 集",
     "library.autoLanguage": "自動",
+    "library.clearUrl": "清空連結",
+    "library.pickEpisode": "選擇要匯入的單集",
+    "library.columnTitle": "節目標題",
+    "library.columnDuration": "時長",
+    "library.fullTitle": "檢視完整標題",
+    "library.feedFailed": "取得節目列表失敗：{reason}",
 
     "discover.title": "推薦的 Podcast",
     "discover.subtitle": "以你正在學的語言播出的節目，來自 Apple Podcasts。每天更新一次。",
@@ -412,6 +430,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "処理中…",
     "library.showMore": "さらに {count} 件を表示",
     "library.autoLanguage": "自動",
+    "library.clearUrl": "リンクを消去",
+    "library.pickEpisode": "インポートするエピソードを選んでください",
+    "library.columnTitle": "エピソード名",
+    "library.columnDuration": "長さ",
+    "library.fullTitle": "タイトル全体を表示",
+    "library.feedFailed": "エピソード一覧を取得できませんでした：{reason}",
 
     "discover.title": "おすすめのポッドキャスト",
     "discover.subtitle":
@@ -534,6 +558,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "처리 중…",
     "library.showMore": "{count}개 더 보기",
     "library.autoLanguage": "자동",
+    "library.clearUrl": "링크 지우기",
+    "library.pickEpisode": "가져올 에피소드를 선택하세요",
+    "library.columnTitle": "에피소드 제목",
+    "library.columnDuration": "길이",
+    "library.fullTitle": "전체 제목 보기",
+    "library.feedFailed": "에피소드 목록을 가져오지 못했습니다: {reason}",
 
     "discover.title": "추천 팟캐스트",
     "discover.subtitle":
@@ -656,6 +686,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "Trabajando…",
     "library.showMore": "Mostrar {count} más",
     "library.autoLanguage": "auto",
+    "library.clearUrl": "Borrar el enlace",
+    "library.pickEpisode": "Elige un episodio para importar",
+    "library.columnTitle": "Título del episodio",
+    "library.columnDuration": "Duración",
+    "library.fullTitle": "Ver el título completo",
+    "library.feedFailed": "No se pudo obtener la lista de episodios: {reason}",
 
     "discover.title": "Pódcasts recomendados",
     "discover.subtitle":
@@ -779,6 +815,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "En cours…",
     "library.showMore": "Afficher {count} de plus",
     "library.autoLanguage": "auto",
+    "library.clearUrl": "Effacer le lien",
+    "library.pickEpisode": "Choisissez un épisode à importer",
+    "library.columnTitle": "Titre de l’épisode",
+    "library.columnDuration": "Durée",
+    "library.fullTitle": "Voir le titre complet",
+    "library.feedFailed": "Impossible de récupérer la liste des épisodes : {reason}",
 
     "discover.title": "Podcasts recommandés",
     "discover.subtitle":
@@ -902,6 +944,12 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "library.working": "Arbeitet…",
     "library.showMore": "{count} weitere anzeigen",
     "library.autoLanguage": "auto",
+    "library.clearUrl": "Link löschen",
+    "library.pickEpisode": "Wähle eine Folge zum Importieren",
+    "library.columnTitle": "Folgentitel",
+    "library.columnDuration": "Dauer",
+    "library.fullTitle": "Vollständigen Titel anzeigen",
+    "library.feedFailed": "Die Episodenliste konnte nicht geladen werden: {reason}",
 
     "discover.title": "Empfohlene Podcasts",
     "discover.subtitle":

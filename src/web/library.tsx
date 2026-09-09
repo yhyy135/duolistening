@@ -505,22 +505,24 @@ function ImportBox({
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [feed, setFeed] = useState<{ feedTitle: string; episodes: Episode[] } | null>(null);
+  /** Why the list could not be fetched — shown in the dialog the list would have been. */
+  const [failure, setFailure] = useState<string | null>(null);
   /** How much of the parsed feed is on screen. Reset with every feed, or the second
       show opens already scrolled past its own first ten episodes. */
   const [shown, setShown] = useState(PAGE);
-  const box = useRef<HTMLElement>(null);
+  /** The one episode showing its title in full, by `audioUrl`. */
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const t = useT();
 
   // A recommendation, opened in the one episode picker this screen has rather than a
   // second one beside it. Cleared as soon as it is taken, so picking the same show
-  // again after importing from it is not a dead click. The scroll is not decoration:
-  // the card was tapped at the bottom of the page and the episodes appear at the top.
+  // again after importing from it is not a dead click. Nothing is scrolled into view
+  // any more: the picker is a modal, and it opens where the reader is already looking.
   useEffect(() => {
     if (!handed) return;
     setUrl(handed);
-    void listEpisodes(handed).then(() =>
-      box.current?.scrollIntoView({ block: "start", behavior: "smooth" }),
-    );
+    void listEpisodes(handed);
     onHandled();
   }, [handed]);
 
@@ -533,16 +535,54 @@ function ImportBox({
         proxyUrl: (target) => proxyUrl(settings.proxy, target),
       });
       setFeed(await podcast.listEpisodes(feedUrl));
+      setFailure(null);
       setShown(PAGE);
-    } catch (failure) {
-      onError(reason(failure));
+      setExpanded(null);
+    } catch (problem) {
+      // Into the dialog rather than up onto the shelf, where the message sat above the
+      // recommendations with nothing around it saying what had been asked for. Whether
+      // the list arrived or not, the answer to "list this feed" lands in one place.
+      setFeed(null);
+      setFailure(reason(problem));
     } finally {
       setBusy(false);
+      // `showModal()` throws on a dialog that is already open, and picking a second
+      // recommendation is exactly how that would happen.
+      if (!dialogRef.current?.open) dialogRef.current?.showModal();
     }
   }
 
+  function pick(episode: Episode) {
+    if (!settings) return;
+    // The id is decided here rather than inside the import, so progress and the "is
+    // this tab driving it" check are keyed by the Resource from the first tick. Keying
+    // them by anything else leaves the shelf showing a Resume button beside a running
+    // import.
+    const id = crypto.randomUUID();
+    const deps = { ...buildImportDeps(settings), newId: () => id };
+    onStart(id, (report) =>
+      startImport(
+        deps,
+        {
+          source: {
+            kind: "podcast",
+            feedUrl: url.trim(),
+            episodeUrl: episode.audioUrl,
+            title: episode.title,
+          },
+          title: episode.title,
+          ...(episode.durationSec && { durationSec: episode.durationSec }),
+        },
+        report,
+      ),
+    );
+    dialogRef.current?.close();
+    setFeed(null);
+    setUrl("");
+  }
+
   return (
-    <section className="import" ref={box}>
+    <section className="import">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -550,68 +590,103 @@ function ImportBox({
           if (trimmed) void listEpisodes(trimmed);
         }}
       >
-        <input
-          value={url}
-          placeholder={t("library.placeholder")}
-          onChange={(event) => setUrl(event.target.value)}
-        />
+        {/* The same wrapper the podcast search below uses, and the same ✕ inside it:
+            one long feed URL is exactly as tedious to clear by hand as one search. */}
+        <span className="search-field">
+          <input
+            value={url}
+            placeholder={t("library.placeholder")}
+            onChange={(event) => setUrl(event.target.value)}
+          />
+          {url && (
+            <button
+              type="button"
+              className="clear"
+              aria-label={t("library.clearUrl")}
+              onClick={() => setUrl("")}
+            >
+              ✕
+            </button>
+          )}
+        </span>
         <button disabled={busy}>{busy ? t("library.working") : t("library.import")}</button>
       </form>
 
-      {feed && (
-        <div className="episodes">
-          <h2>{feed.feedTitle}</h2>
-          <ul>
-            {feed.episodes.slice(0, shown).map((episode) => (
-              <li key={episode.audioUrl}>
-                <button
-                  disabled={busy || !settings}
-                  onClick={() => {
-                    if (!settings) return;
-                    // The id is decided here rather than inside the import, so progress
-                    // and the "is this tab driving it" check are keyed by the Resource
-                    // from the first tick. Keying them by anything else leaves the shelf
-                    // showing a Resume button beside a running import.
-                    const id = crypto.randomUUID();
-                    const deps = { ...buildImportDeps(settings), newId: () => id };
-                    onStart(id, (report) =>
-                      startImport(
-                        deps,
-                        {
-                          source: {
-                            kind: "podcast",
-                            feedUrl: url.trim(),
-                            episodeUrl: episode.audioUrl,
-                            title: episode.title,
-                          },
-                          title: episode.title,
-                          ...(episode.durationSec && { durationSec: episode.durationSec }),
-                        },
-                        report,
-                      ),
-                    );
-                    setFeed(null);
-                    setUrl("");
-                  }}
-                >
-                  {episode.title}
-                </button>
-                <span className="meta">
-                  {episode.publishedAt?.slice(0, 10)}
-                  {episode.durationSec ? ` · ${formatTime(episode.durationSec)}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {shown < feed.episodes.length && (
-            <button type="button" className="more" onClick={() => setShown(shown + PAGE)}>
+      {/* One dialog for both answers a feed can give. A modal rather than a block that
+          pushes the shelf down: a feed's episodes are a decision to make now, and the
+          list used to appear above a screen the reader was already scrolled past. */}
+      <dialog ref={dialogRef} className="ask-dialog episodes-dialog">
+        {feed && (
+          <>
+            <p className="text">{feed.feedTitle}</p>
+            <p className="note">{t("library.pickEpisode")}</p>
+            {/* The scroll is here and not on the dialog, so the show's name, the
+                header row and the buttons stay put while three hundred episodes move. */}
+            <div className="list">
+              <table className="episodes">
+                <thead>
+                  <tr>
+                    <th>{t("library.columnTitle")}</th>
+                    <th className="dur">{t("library.columnDuration")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feed.episodes.slice(0, shown).map((episode) => (
+                    <tr
+                      key={episode.audioUrl}
+                      className={expanded === episode.audioUrl ? "open" : ""}
+                    >
+                      <td className="title">
+                        {/* `title` is the tooltip a mouse gets for free; the ⋯ beside
+                            it is the same thing for a finger, which never hovers. */}
+                        <button
+                          type="button"
+                          className="pick"
+                          title={episode.title}
+                          disabled={busy || !settings}
+                          onClick={() => pick(episode)}
+                        >
+                          {episode.title}
+                        </button>
+                        <button
+                          type="button"
+                          className="expand"
+                          aria-label={t("library.fullTitle")}
+                          aria-expanded={expanded === episode.audioUrl}
+                          onClick={() =>
+                            setExpanded(expanded === episode.audioUrl ? null : episode.audioUrl)
+                          }
+                        >
+                          ⋯
+                        </button>
+                        {episode.publishedAt && (
+                          <span className="when">{episode.publishedAt.slice(0, 10)}</span>
+                        )}
+                      </td>
+                      <td className="dur">
+                        {episode.durationSec ? formatTime(episode.durationSec) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        {failure && <p className="text">{t("library.feedFailed", { reason: failure })}</p>}
+        <div className="actions">
+          {feed && shown < feed.episodes.length && (
+            <button type="button" onClick={() => setShown(shown + PAGE)}>
               {t("library.showMore", {
                 count: Math.min(PAGE, feed.episodes.length - shown),
               })}
             </button>
           )}
+          <button type="button" className="ghost" onClick={() => dialogRef.current?.close()}>
+            {t("common.close")}
+          </button>
         </div>
-      )}
+      </dialog>
     </section>
   );
 }
