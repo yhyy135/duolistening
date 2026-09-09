@@ -24,9 +24,11 @@ import {
   type SlotCheck,
 } from "../shared/model.ts";
 import { Icon } from "./icons.tsx";
+import { t as translate } from "../shared/i18n.ts";
 import { rememberLocale, useT } from "./i18n.ts";
 import { checkSettings } from "./model-check.ts";
 import { checkProxy, type ProxyCheck } from "./proxy.ts";
+import { decodeSettings, encodeSettings } from "./settings-transfer.ts";
 import { readSettings, writeSettings } from "./store.ts";
 import { listModels } from "./text-model.ts";
 
@@ -156,6 +158,31 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   };
 
   /**
+   * A whole Settings off the transfer string, replacing rather than merging: an absent
+   * `targetLanguage` means "detect each recording's own language", and spreading this
+   * over the current form would keep whatever language was set here instead.
+   *
+   * Nothing is written. The form goes dirty like any other edit, so Back still arms
+   * and Save is still the thing that keeps it — a string someone pasted by mistake
+   * costs one Back, not a Settings screen overwritten before they could look at it.
+   */
+  const applyImported = (imported: Settings) => {
+    setSettings(imported);
+    // The interface follows the pasted Native Language the same way the dropdown
+    // makes it follow, so you can see what arrived. `savedRef` is untouched, so
+    // discarding puts the old one back.
+    onLocale(imported.nativeLanguage);
+    setCheck(null);
+    setProxyCheck(null);
+    setModelsStatus({});
+    setDiscarding(false);
+    // Looked up in the language that just arrived, not through `t`. The interface has
+    // only been told to switch; this render's `t` still answers in the language being
+    // left, so the one sentence about the import would land in the wrong one.
+    setStatus(translate(imported.nativeLanguage, "settings.imported"));
+  };
+
+  /**
    * Two clicks on one button, the way the shelf's Delete does it, and for a reason the
    * shelf only half stated: `confirm()` does not merely read as a browser error, it can
    * silently answer `false`. A viewer that blocks modals — a sandboxed frame, or Chrome
@@ -218,17 +245,20 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
 
   return (
     <main className="settings">
-      {/* Focus leaving disarms it, so a Back armed and then ignored is not a trap
-          waiting for the next person who reaches for it. */}
-      <button
-        type="button"
-        className={discarding ? "back armed" : "back"}
-        onClick={goBack}
-        onBlur={() => setDiscarding(false)}
-      >
-        <Icon name="arrow-left" />
-        {discarding ? t("settings.discard") : t("common.back")}
-      </button>
+      <div className="settings-head">
+        {/* Focus leaving disarms it, so a Back armed and then ignored is not a trap
+            waiting for the next person who reaches for it. */}
+        <button
+          type="button"
+          className={discarding ? "back armed" : "back"}
+          onClick={goBack}
+          onBlur={() => setDiscarding(false)}
+        >
+          <Icon name="arrow-left" />
+          {discarding ? t("settings.discard") : t("common.back")}
+        </button>
+        <SettingsTransfer settings={settings} onImport={applyImported} />
+      </div>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -320,6 +350,134 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
         </div>
       </form>
     </main>
+  );
+}
+
+/**
+ * Settings out of one browser and into another, as one string to copy (see
+ * `settings-transfer.ts`, which is also where the honest description of what that
+ * string protects lives — obfuscation, not confidentiality, which is why the export
+ * says so on screen rather than letting the word "encrypted" imply otherwise).
+ *
+ * Two `<dialog>`s rather than two screens: this is the last thing anyone does on a new
+ * device and the first thing they forget exists, and a route of its own would be one
+ * more thing to find.
+ */
+function SettingsTransfer({
+  settings,
+  onImport,
+}: {
+  settings: Settings;
+  onImport: (settings: Settings) => void;
+}) {
+  const t = useT();
+  const exportRef = useRef<HTMLDialogElement>(null);
+  const importRef = useRef<HTMLDialogElement>(null);
+  const [cipher, setCipher] = useState("");
+  /** Whatever the last copy attempt has to say — it succeeded, or it could not. */
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [pasted, setPasted] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function showExport() {
+    setCopyStatus(null);
+    setCipher(await encodeSettings(settings));
+    exportRef.current?.showModal();
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(cipher);
+      setCopyStatus(t("settings.copied"));
+    } catch {
+      // Denied permission, or an insecure origin. The text is on screen and selectable,
+      // so saying what to do instead beats a button that quietly did nothing.
+      setCopyStatus(t("settings.copyFailed"));
+    }
+  }
+
+  async function apply() {
+    const result = await decodeSettings(pasted);
+    // Every way this fails means one thing to a reader — what you pasted is not one of
+    // these strings — so there is one sentence for all of them. `result.problem` says
+    // which, in English, for whoever is looking at a console.
+    if (!result.ok) {
+      console.warn("settings transfer:", result.problem);
+      return setProblem(t("settings.importFailed"));
+    }
+    onImport(result.settings);
+    setPasted("");
+    setProblem(null);
+    importRef.current?.close();
+  }
+
+  return (
+    <div className="transfer">
+      <button type="button" className="ghost" onClick={() => void showExport()}>
+        <Icon name="download" />
+        {t("settings.exportSettings")}
+      </button>
+      <button
+        type="button"
+        className="ghost"
+        onClick={() => {
+          setProblem(null);
+          importRef.current?.showModal();
+        }}
+      >
+        <Icon name="upload" />
+        {t("settings.importSettings")}
+      </button>
+
+      <dialog ref={exportRef} className="ask-dialog transfer-dialog">
+        <p className="text">{t("settings.exportTitle")}</p>
+        {/* Ahead of the string, not under it: it says what the string is for, and
+            that is worth reading before the eye lands on 500 characters of base64. */}
+        <p className="note">{t("settings.exportWarning")}</p>
+        {/* Read-only rather than a <p>: a textarea scrolls, selects, and hands the
+            whole value to a manual copy when the clipboard API is not available. */}
+        <textarea
+          className="cipher"
+          value={cipher}
+          readOnly
+          rows={6}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <div className="actions">
+          <button type="button" onClick={() => void copy()}>
+            {t("settings.copy")}
+          </button>
+          <button type="button" className="ghost" onClick={() => exportRef.current?.close()}>
+            {t("common.close")}
+          </button>
+          {copyStatus && <span className="notice">{copyStatus}</span>}
+        </div>
+      </dialog>
+
+      <dialog ref={importRef} className="ask-dialog transfer-dialog">
+        <p className="text">{t("settings.importTitle")}</p>
+        <textarea
+          className="cipher"
+          value={pasted}
+          placeholder={t("settings.cipherPlaceholder")}
+          rows={6}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          onChange={(event) => setPasted(event.target.value)}
+        />
+        {problem && <p className="error">{problem}</p>}
+        <div className="actions">
+          <button type="button" disabled={!pasted.trim()} onClick={() => void apply()}>
+            {t("settings.importApply")}
+          </button>
+          <button type="button" className="ghost" onClick={() => importRef.current?.close()}>
+            {t("common.close")}
+          </button>
+        </div>
+      </dialog>
+    </div>
   );
 }
 

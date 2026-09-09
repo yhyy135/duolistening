@@ -115,6 +115,19 @@ const en = {
   "settings.answered": "✓ Answered.",
   "settings.modelsFound": "{count} models found.",
   "settings.discard": "Discard unsaved changes?",
+  "settings.exportSettings": "Export",
+  "settings.importSettings": "Import",
+  "settings.exportTitle": "Export Configuration",
+  "settings.exportWarning":
+    "Below is your configuration string. Copy it and paste it on another device to import the same setup quickly.",
+  "settings.copy": "Copy",
+  "settings.copied": "Copied",
+  "settings.copyFailed": "Could not copy — select the text and copy it yourself.",
+  "settings.importTitle": "Quick Import",
+  "settings.cipherPlaceholder": "Enter the configuration string",
+  "settings.importApply": "Confirm Import",
+  "settings.importFailed": "Import failed: could not parse the string.",
+  "settings.imported": "Filled in — press Save to keep them.",
 };
 
 /** Every other language answers the same keys English does. */
@@ -226,6 +239,18 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ 已响应。",
     "settings.modelsFound": "找到 {count} 个模型。",
     "settings.discard": "放弃未保存的修改？",
+    "settings.exportSettings": "导出",
+    "settings.importSettings": "导入",
+    "settings.exportTitle": "导出配置",
+    "settings.exportWarning": "下面是配置密文，可复制到其他终端快速导入相同配置",
+    "settings.copy": "复制",
+    "settings.copied": "已复制",
+    "settings.copyFailed": "复制失败，请自己选中文本复制。",
+    "settings.importTitle": "快速导入",
+    "settings.cipherPlaceholder": "请输入配置密文",
+    "settings.importApply": "确认导入",
+    "settings.importFailed": "导入失败，密文解析错误",
+    "settings.imported": "已填入，按保存才会生效。",
   },
 
   "zh-TW": {
@@ -331,6 +356,18 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ 已回應。",
     "settings.modelsFound": "找到 {count} 個模型。",
     "settings.discard": "放棄未儲存的變更？",
+    "settings.exportSettings": "匯出",
+    "settings.importSettings": "匯入",
+    "settings.exportTitle": "匯出配置",
+    "settings.exportWarning": "下面是配置密文，可複製到其他裝置快速匯入相同配置",
+    "settings.copy": "複製",
+    "settings.copied": "已複製",
+    "settings.copyFailed": "複製失敗，請自己選取文字複製。",
+    "settings.importTitle": "快速匯入",
+    "settings.cipherPlaceholder": "請輸入配置密文",
+    "settings.importApply": "確認匯入",
+    "settings.importFailed": "匯入失敗，密文解析錯誤",
+    "settings.imported": "已填入，按儲存才會生效。",
   },
 
   ja: {
@@ -439,6 +476,19 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ 応答あり。",
     "settings.modelsFound": "{count} 件のモデルが見つかりました。",
     "settings.discard": "保存していない変更を破棄しますか？",
+    "settings.exportSettings": "エクスポート",
+    "settings.importSettings": "インポート",
+    "settings.exportTitle": "設定のエクスポート",
+    "settings.exportWarning":
+      "下記は設定の文字列です。他の端末に貼り付ければ同じ設定をすぐに取り込めます。",
+    "settings.copy": "コピー",
+    "settings.copied": "コピーしました",
+    "settings.copyFailed": "コピーできませんでした。テキストを選んで自分でコピーしてください。",
+    "settings.importTitle": "クイックインポート",
+    "settings.cipherPlaceholder": "設定の文字列を入力",
+    "settings.importApply": "インポートを確定",
+    "settings.importFailed": "インポートに失敗しました。文字列を解析できません。",
+    "settings.imported": "入力しました。保存を押すと反映されます。",
   },
 
   ko: {
@@ -547,6 +597,19 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ 응답함.",
     "settings.modelsFound": "모델 {count}개를 찾았습니다.",
     "settings.discard": "저장하지 않은 변경을 버릴까요?",
+    "settings.exportSettings": "내보내기",
+    "settings.importSettings": "가져오기",
+    "settings.exportTitle": "설정 내보내기",
+    "settings.exportWarning":
+      "아래는 설정 문자열입니다. 다른 기기에 붙여넣으면 동일한 설정을 빠르게 가져올 수 있습니다.",
+    "settings.copy": "복사",
+    "settings.copied": "복사됨",
+    "settings.copyFailed": "복사하지 못했습니다. 텍스트를 선택해 직접 복사하세요.",
+    "settings.importTitle": "빠른 가져오기",
+    "settings.cipherPlaceholder": "설정 문자열 입력",
+    "settings.importApply": "가져오기 확인",
+    "settings.importFailed": "가져오기 실패: 문자열을 해석할 수 없습니다.",
+    "settings.imported": "채웠습니다. 저장을 눌러야 유지됩니다.",
   },
 
   es: {
@@ -656,6 +719,19 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ Respondió.",
     "settings.modelsFound": "{count} modelos encontrados.",
     "settings.discard": "¿Descartar los cambios sin guardar?",
+    "settings.exportSettings": "Exportar",
+    "settings.importSettings": "Importar",
+    "settings.exportTitle": "Exportar configuración",
+    "settings.exportWarning":
+      "Esta es tu cadena de configuración. Cópiala y pégala en otro dispositivo para importar la misma configuración al instante.",
+    "settings.copy": "Copiar",
+    "settings.copied": "Copiado",
+    "settings.copyFailed": "No se pudo copiar: selecciona el texto y cópialo tú.",
+    "settings.importTitle": "Importación rápida",
+    "settings.cipherPlaceholder": "Introduce la cadena de configuración",
+    "settings.importApply": "Confirmar importación",
+    "settings.importFailed": "Error al importar: no se pudo interpretar la cadena.",
+    "settings.imported": "Rellenados: pulsa Guardar para conservarlos.",
   },
 
   fr: {
@@ -765,6 +841,19 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ A répondu.",
     "settings.modelsFound": "{count} modèles trouvés.",
     "settings.discard": "Abandonner les modifications non enregistrées ?",
+    "settings.exportSettings": "Exporter",
+    "settings.importSettings": "Importer",
+    "settings.exportTitle": "Exporter la configuration",
+    "settings.exportWarning":
+      "Voici votre chaîne de configuration. Copiez-la et collez-la sur un autre appareil pour importer rapidement la même configuration.",
+    "settings.copy": "Copier",
+    "settings.copied": "Copié",
+    "settings.copyFailed": "Copie impossible — sélectionnez le texte et copiez-le vous-même.",
+    "settings.importTitle": "Importation rapide",
+    "settings.cipherPlaceholder": "Saisissez la chaîne de configuration",
+    "settings.importApply": "Confirmer l'importation",
+    "settings.importFailed": "Échec de l'importation : impossible d'analyser la chaîne.",
+    "settings.imported": "Remplis — appuyez sur Enregistrer pour les garder.",
   },
 
   de: {
@@ -875,6 +964,20 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "settings.answered": "✓ Hat geantwortet.",
     "settings.modelsFound": "{count} Modelle gefunden.",
     "settings.discard": "Nicht gespeicherte Änderungen verwerfen?",
+    "settings.exportSettings": "Exportieren",
+    "settings.importSettings": "Importieren",
+    "settings.exportTitle": "Konfiguration exportieren",
+    "settings.exportWarning":
+      "Das ist deine Konfigurationszeichenkette. Kopiere sie und füge sie auf einem anderen Gerät ein, um dieselbe Konfiguration schnell zu übernehmen.",
+    "settings.copy": "Kopieren",
+    "settings.copied": "Kopiert",
+    "settings.copyFailed": "Kopieren ging nicht — markier den Text und kopier ihn selbst.",
+    "settings.importTitle": "Schnellimport",
+    "settings.cipherPlaceholder": "Konfigurationszeichenkette eingeben",
+    "settings.importApply": "Import bestätigen",
+    "settings.importFailed":
+      "Import fehlgeschlagen: Die Zeichenkette konnte nicht gelesen werden.",
+    "settings.imported": "Ausgefüllt — zum Behalten auf Speichern drücken.",
   },
 };
 

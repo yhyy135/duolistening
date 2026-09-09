@@ -168,7 +168,8 @@ kbd {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--ink);
   background: var(--panel);
@@ -177,7 +178,8 @@ select {
   padding: 0.45em 0.6em;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -963,11 +965,25 @@ button.ask {
 
 /* ---- settings ---- */
 
+/* Back on the left, the transfer pair on the right, wrapping rather than overflowing:
+   at 320px two labelled buttons plus Back do not fit on one line, and a row that
+   scrolls sideways is a row nobody finds the right-hand end of. */
+.settings-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.settings-head .transfer {
+  display: flex;
+  gap: 0.4rem;
+}
 .settings .back {
   background: none;
   color: var(--dim);
   padding: 0.4em 0;
-  margin-bottom: 0.6rem;
 }
 .settings .back:hover:not(:disabled) {
   background: none;
@@ -1052,6 +1068,44 @@ button.ask {
    down and this only widens that step. */
 .settings .field-row input.masked {
   -webkit-text-security: disc;
+}
+
+/* The transfer dialogs borrow `.ask-dialog`'s panel, backdrop and width outright —
+   only what actually differs is below. */
+/* Width stated rather than left to the content, which is the whole of why these two
+   looked like different components: a <dialog> shrinks to fit, so the export sized
+   itself to 500 characters of monospace and the import to an empty textarea's default
+   columns — 343px against 246px on the same phone, from the two buttons next to each
+   other. */
+.transfer-dialog {
+  width: min(36rem, 100% - 2rem);
+}
+/* Muted, not `--bad`. It was red when it warned that the string carries live keys;
+   it now says what the string is and where to paste it, and a red block of that in
+   one dialog and nothing in the other is what made the pair look unrelated. */
+.transfer-dialog .note {
+  margin: 0 0 0.8rem;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+/* Small, because the whole string is shown rather than an ellipsis: a reader copying
+   it wants to see that it ended, and a wrapped 600 characters at body size is a
+   dialog taller than a phone. Monospace so a hand-typed one can be checked. */
+.transfer-dialog .cipher {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  word-break: break-all;
+  resize: vertical;
+  margin-bottom: 0.8rem;
+}
+.transfer-dialog .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .settings .actions {

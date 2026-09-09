@@ -38,29 +38,30 @@ docs/adr/    why things are the way they are
 
 There is no `ports.ts` any more. It existed to hold the seams a server needed; with one implementation of everything, each module declares the narrow shape it actually depends on — the Annotator asks for `completeJson`, not for a whole TextModel.
 
-| Module              | What it hides                                                                                                                                  |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `store.ts`          | All persistence — IndexedDB, and the audio content-type correction on the way in                                                               |
-| `backup.ts`         | The export document, and validating one someone hands back                                                                                     |
-| `pipeline.ts`       | The composition root: the only file that knows how the pieces fit together                                                                     |
-| `import.ts`         | ingest → transcribe, and the retry that resumes one                                                                                            |
-| `transcribe.ts`     | **The deepest module.** Byte-range chunking, ASR-placed seams, stitching                                                                       |
-| `speech-to-text.ts` | One `/audio/transcriptions` call in `url` mode, and word-list-to-segment assignment                                                            |
-| `text-model.ts`     | `/chat/completions` — plain, JSON-repaired, or streamed — plus `listModels`                                                                    |
-| `annotate.ts`       | Batched translation, which window to translate next, and whether a Transcript is Japanese                                                      |
-| `japanese.ts`       | kuromoji: loading it, morphemes, part-of-speech mapping, katakana→hiragana                                                                     |
-| `proxy.ts`          | Every URL the Worker understands, an episode's size, and the proxy's own check                                                                 |
-| `podcast-feed.ts`   | RSS fetching (through the proxy) and parsing                                                                                                   |
-| `itunes.ts`         | Apple's podcast search, the language-to-storefront table, and the once-a-day cache                                                             |
-| `icons.tsx`         | Reicon's SVGs, inlined — one `<Icon name>` and nothing else                                                                                    |
-| `model-check.ts`    | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                                                  |
-| `app.tsx`           | The hash route, the header, the theme, the Native Language context                                                                             |
-| `library.tsx`       | The shelf, the paste-a-link box, live import progress, export/import, and the day's recommendations                                            |
-| `player.tsx`        | The lyrics view: rAF sweep, follow-mode scroll, the drawn transport, ask-AI, Japanese Tokens, and the translation window that follows playback |
-| `settings.tsx`      | Two model slots, the proxy, the language pair, and the connection checks                                                                       |
-| `shared/i18n.ts`    | Every user-facing string, in all eight languages — including the ask-AI prompt                                                                 |
-| `web/i18n.ts`       | Which of them is in force: the Native Language, held in a context                                                                              |
-| `worker/index.ts`   | Following a redirect, adding CORS, and serving a byte range as a whole file                                                                    |
+| Module                 | What it hides                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `store.ts`             | All persistence — IndexedDB, and the audio content-type correction on the way in                                                               |
+| `backup.ts`            | The export document, and validating one someone hands back                                                                                     |
+| `settings-transfer.ts` | Settings as one copyable string, and validating one someone pastes back                                                                        |
+| `pipeline.ts`          | The composition root: the only file that knows how the pieces fit together                                                                     |
+| `import.ts`            | ingest → transcribe, and the retry that resumes one                                                                                            |
+| `transcribe.ts`        | **The deepest module.** Byte-range chunking, ASR-placed seams, stitching                                                                       |
+| `speech-to-text.ts`    | One `/audio/transcriptions` call in `url` mode, and word-list-to-segment assignment                                                            |
+| `text-model.ts`        | `/chat/completions` — plain, JSON-repaired, or streamed — plus `listModels`                                                                    |
+| `annotate.ts`          | Batched translation, which window to translate next, and whether a Transcript is Japanese                                                      |
+| `japanese.ts`          | kuromoji: loading it, morphemes, part-of-speech mapping, katakana→hiragana                                                                     |
+| `proxy.ts`             | Every URL the Worker understands, an episode's size, and the proxy's own check                                                                 |
+| `podcast-feed.ts`      | RSS fetching (through the proxy) and parsing                                                                                                   |
+| `itunes.ts`            | Apple's podcast search, the language-to-storefront table, and the once-a-day cache                                                             |
+| `icons.tsx`            | Reicon's SVGs, inlined — one `<Icon name>` and nothing else                                                                                    |
+| `model-check.ts`       | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                                                  |
+| `app.tsx`              | The hash route, the header, the theme, the Native Language context                                                                             |
+| `library.tsx`          | The shelf, the paste-a-link box, live import progress, export/import, and the day's recommendations                                            |
+| `player.tsx`           | The lyrics view: rAF sweep, follow-mode scroll, the drawn transport, ask-AI, Japanese Tokens, and the translation window that follows playback |
+| `settings.tsx`         | Two model slots, the proxy, the language pair, and the connection checks                                                                       |
+| `shared/i18n.ts`       | Every user-facing string, in all eight languages — including the ask-AI prompt                                                                 |
+| `web/i18n.ts`          | Which of them is in force: the Native Language, held in a context                                                                              |
+| `worker/index.ts`      | Following a redirect, adding CORS, and serving a byte range as a whole file                                                                    |
 
 ## Invariants that are easy to break
 
@@ -87,6 +88,9 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 
 - **An import started from the player re-reads its Resource, and writes the position back afterwards.** The retry offered where the missing Lines are runs `store.save`, which puts the whole Resource row — including a `lastPositionSec` from whenever that screen opened. So it takes a fresh Resource going in, and calls `savePosition` again on the way out, because the import ran for minutes while something was almost certainly playing. (`player.tsx`)
 - **No secret leaves in an export.** `forExport` blanks them, and `backup.test.ts` sweeps the exported object for the values rather than checking three field names — because naming fields is exactly what failed when `proxy.key` joined Settings. (`backup.ts`)
+- **The one export that does carry secrets is a different export.** Setting up a second device means retyping two base URLs, two keys, two model names and the proxy's URL and key, so `settings-transfer.ts` puts all of it in one string to copy — the exact opposite of the rule above, kept separate from it rather than folded into it. Its key is a constant in the bundle, which makes it obfuscation and not confidentiality: anyone who can load the page can decrypt any string it produces. That is a deliberate choice for one paste between a reader's own two devices. The export dialog used to say so on screen and no longer does — the copy there now explains what the string is for, not what it fails to protect against — so the file header is the only place that record lives. Anyone widening where this string is allowed to travel should read it first, and reach for the PBKDF2 passphrase it describes. (`settings-transfer.ts`, `settings.tsx`)
+- **A pasted settings string is rebuilt field by field, never cast.** It is a trust boundary: a hand-edited one must not put a field of its own into IndexedDB, and a `nativeLanguage` this build has no strings for would leave the interface blank with no readable way back to the screen that could fix it. An unknown `targetLanguage` is dropped rather than refused, because absent is a real value there. (`settings-transfer.ts`)
+- **Importing a settings string fills the form and writes nothing.** Save is still what keeps it, so a string pasted by mistake costs one Back rather than a Settings screen overwritten before anyone could look at it. The confirmation is looked up in the language that just arrived rather than through `t`, whose closure still answers in the language being left. (`settings.tsx`)
 - **An import only ever adds.** A colliding id means the same Resource, and the copy already here may hold a playback position the file does not. (`backup.ts`)
 - **The connection check calls the endpoint the pipeline calls, in the mode it calls it.** A cheaper probe passes for a model that does not exist; an upload-only probe passes for a provider that cannot fetch a `url`, which is how every import moves audio. The transcription slot gets a real generated clip, and it is a quiet tone rather than digital silence because some endpoints reject an all-zero file as "no audio". (`model-check.ts`)
 - **Furigana comes from kuromoji's `reading`, not `pronunciation`.** `pronunciation` writes long vowels as ー (ショーカイ); furigana is written しょうかい. (`japanese.ts`)
@@ -128,7 +132,7 @@ Every one of these was a real bug. If you change the code near one, keep the tes
 - **No `LICENSE`.** Needs choosing before this is published anywhere.
 - **No CI.** `npm test && npm run typecheck && npm run build` is the whole of it.
 - **Nothing has been deployed, and no episode has been imported end to end** on the new architecture. Every piece is verified on its own and the two halves have never been run together against a real feed.
-- **A Library is per-browser-per-origin.** A phone and a laptop are two Libraries with no path between them, and the export is the only bridge. For a listening app the phone is a plausible primary device, so this is the sharpest open question (ADR 0008).
+- **A Library is per-browser-per-origin.** A phone and a laptop are two Libraries with no path between them, and the two exports are the only bridges — the backup file for episodes, the transfer string for Settings. For a listening app the phone is a plausible primary device, so this is the sharpest open question (ADR 0008).
 - **Translation can fall behind playback**, on a fast connection to a slow model: the Lines are there and the audio plays, the translations simply arrive under them late. Accepted (ADR 0011). A window that fails is not retried until the page is reloaded, and the only sign is the message beside the lyrics.
 - **The ask-AI popup is one shot.** One fixed prompt about one Line, no input box, no history — so re-opening it asks the identical question. `completeStream(prompt: string)` takes a single string; follow-up means giving it a message list.
 - **No retry for a `ready` Resource.** Re-importing would discard a Transcript that cost money, so redoing one is delete-and-import.
