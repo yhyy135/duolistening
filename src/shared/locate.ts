@@ -15,8 +15,12 @@ export interface Position {
  * the answer stays on the last thing that started, so the highlight doesn't blink
  * out during pauses. Before the first Line starts, lineIndex is -1.
  *
- * Requires `lines` ordered by startSec, and each Line's `words` likewise;
- * the binary search silently misbehaves on unordered input.
+ * Requires `lines` ordered by startSec, and each Line's `words` likewise —
+ * `toSegments` is what guarantees the second one. Unordered input does not make the
+ * answer jump about, which is the failure that would show: whichever index the search
+ * returns can only grow as `t` does, because the first node where two searches diverge
+ * sends the later `t` right, and everything right of a node outranks everything left
+ * of it. What it does instead is quietly hide a Word that a larger predecessor covers.
  */
 export function locate(lines: readonly Line[], t: number): Position {
   const lineIndex = lastStartedAt(lines, t);
@@ -46,15 +50,25 @@ function lastStartedAt(spans: readonly { startSec: number }[], t: number): numbe
   return found;
 }
 
+/** Half-open `[first, limit)` range of Word indices — which Words sound one Token. */
+export type WordRange = readonly [number, number];
+
 /**
- * Which Word sounds each Token — `result[t]` is an index into `line.words`, so a
- * renderer showing Tokens can still highlight word by word.
+ * Which Words sound each Token — `result[t]` is a range of indices into `line.words`,
+ * so a renderer showing Tokens can still highlight word by word.
  *
  * Word and Token are measured from different places (audio timing vs. morphology)
  * and their boundaries genuinely disagree, so they are reconciled here the only way
- * they can be: both are matched back onto `line.text` by character offset, and each
- * Token takes the last Word that starts at or before it. One Word covering three
- * Tokens lights all three at once, which is what was actually heard.
+ * they can be: both are matched back onto `line.text` by character offset. A Token
+ * starts on the last Word that starts at or before it, and runs until a *later* Token
+ * claims a Word of its own. One Word covering three Tokens lights all three at once,
+ * which is what was actually heard.
+ *
+ * A range rather than a single Word because the disagreement goes both ways, and the
+ * other way is the common one for Japanese: an ASR reporting one Word per kana turns
+ * a five-character Token into five Words, and a Token that lit only on the first of
+ * them flashed for a fifth of its own sound and then went out while it was still being
+ * spoken. Tokens sharing a first Word share a range and still light together.
  *
  * Null when there is nothing to reconcile — no Tokens, or no Word timings (ADR 0004),
  * which is the caller's cue to fall back to highlighting the whole Line.
@@ -63,7 +77,7 @@ function lastStartedAt(spans: readonly { startSec: number }[], t: number): numbe
  * timestamp (ADR 0005), and giving it one would tie morphology to whichever ASR
  * happened to transcribe the audio.
  */
-export function tokenWords(line: Line): number[] | null {
+export function tokenWords(line: Line): WordRange[] | null {
   const { tokens, words } = line;
   if (!tokens?.length || !words?.length) return null;
 
@@ -77,10 +91,36 @@ export function tokenWords(line: Line): number[] | null {
   );
 
   let word = 0;
-  return tokenSpans.map(([start]) => {
+  const firsts = tokenSpans.map(([start]) => {
     while (word + 1 < wordSpans.length && (wordSpans[word + 1] as Span)[0] <= start) word++;
     return word;
   });
+
+  // Backwards, so each Token learns where the next one that moved on actually begins.
+  // A Token whose surface the text does not contain collapses onto its neighbour's
+  // Word (see `alignTo`); it must not end up with an empty range and never light.
+  const ranges: WordRange[] = new Array(firsts.length);
+  let limit = words.length;
+  for (let index = firsts.length - 1; index >= 0; index--) {
+    const first = firsts[index] as number;
+    const next = firsts[index + 1];
+    if (next !== undefined && next > first) limit = next;
+    ranges[index] = [first, limit];
+  }
+  return ranges;
+}
+
+/**
+ * Where one piece of the current Line sits in the karaoke sweep, as a CSS class:
+ * "pending" before its Words, "now" through all of them, "said" after.
+ *
+ * Empty when there is nothing to sweep with — no range, or a Line whose first Word has
+ * not started. The Line is then highlighted whole (ADR 0004), and dimming its pieces
+ * would only make that look broken.
+ */
+export function sweepState(range: WordRange | undefined, wordIndex: number | null): string {
+  if (!range || wordIndex === null) return "";
+  return wordIndex < range[0] ? "pending" : wordIndex < range[1] ? "now" : "said";
 }
 
 /**

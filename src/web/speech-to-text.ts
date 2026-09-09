@@ -197,6 +197,13 @@ async function looksTooLarge(response: Response): Promise<boolean> {
  *
  * The API reports words in one flat list for the whole request rather than nested
  * per segment, so they are assigned by which segment's time span they fall in.
+ *
+ * That flat list is not reliably in time order. Providers concatenate it segment by
+ * segment, and segments overlap: one real Japanese episode came back with 191 Words
+ * starting earlier than the Word before them, every one of them a straddler the
+ * midpoint rule below had pulled back into the previous segment. `locate` asks for
+ * ordered Words and silently hides the ones it does not get, so they are sorted here,
+ * at the one place a Word becomes part of a Line.
  */
 export function toSegments(body: VerboseJson): RawSegment[] {
   const segments = (body.segments ?? []).flatMap((segment) => {
@@ -211,11 +218,13 @@ export function toSegments(body: VerboseJson): RawSegment[] {
   // pretending the whole episode is one line.
   if (segments.length === 0) return [];
 
-  const words = (body.words ?? []).flatMap((word) =>
-    typeof word.start === "number" && typeof word.end === "number" && word.word
-      ? [{ text: word.word, startSec: word.start, endSec: word.end }]
-      : [],
-  );
+  const words = (body.words ?? [])
+    .flatMap((word) =>
+      typeof word.start === "number" && typeof word.end === "number" && word.word
+        ? [{ text: word.word, startSec: word.start, endSec: word.end }]
+        : [],
+    )
+    .sort((left, right) => left.startSec - right.startSec);
   if (words.length === 0) return segments;
 
   return segments.map((segment) => {

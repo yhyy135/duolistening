@@ -1,6 +1,6 @@
 # Japanese tagging via a dedicated morphological analyzer, not the LLM
 
-Status: accepted; _when_ Tokens are computed is superseded by [ADR 0011](0011-translate-while-listening.md), which annotates a window of Lines while someone is listening rather than every Line at import time. What they are, where they come from and how they are shown is unchanged.
+Status: accepted; _when_ Tokens are computed is superseded by [ADR 0011](0011-translate-while-listening.md) and then by [ADR 0015](0015-tokens-are-local-and-not-annotation.md): not every Line at import time, and not a window at annotation time either, but every Line of a Transcript when the player opens it. What they are, where they come from and how they are shown is unchanged.
 
 Part-of-speech and furigana readings for Japanese come from a dedicated Japanese morphological analyzer (kuromoji-family tooling; exact library picked during implementation), not from the configured Text Model. It runs as a step in the same backend pipeline that produces the Transcript, alongside translation, and its output (per-Token part-of-speech and reading) is stored on each Line at transcription time — computed once for every Line, not on demand for whichever one is currently playing. Which Line's tags are actually shown (only the currently-playing one, per the reference app) is a rendering choice, unrelated to when the data is produced.
 

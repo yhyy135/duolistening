@@ -1,6 +1,6 @@
 # Translate while listening, not before it
 
-Status: accepted.
+Status: accepted; _when_ Tokens are computed is superseded by [ADR 0015](0015-tokens-are-local-and-not-annotation.md), which takes them out of annotation entirely — the player computes them for the whole Transcript when it opens one, since kuromoji is local and nothing about it is billed per Line. Everything here about translation is unchanged.
 
 Translation is no longer a step in the import. An import ends at a Transcript, and the player asks the Text Model for a window of Lines around wherever playback is — the block being listened to, one ahead and one behind, forty Lines to a block — writing each window back to IndexedDB as it lands. `nextWindow` in `annotate.ts` decides which window; the Annotator itself is unchanged, and simply annotates whatever slice it is handed.
 
@@ -12,4 +12,4 @@ The blocks are a fixed grid rather than a moving range, so "have we asked for th
 
 Known ceilings, both accepted. Playback can outrun translation on a fast connection to a slow model — the Lines are there and the audio plays, the translations simply arrive behind. And an offline reader now gets a Transcript with no translations under it, where before an imported episode carried its own; the export still carries whatever has been translated so far, so a Library that has been listened to travels with its translations.
 
-This supersedes the part of [ADR 0005](0005-japanese-tagging-via-morphological-analyzer.md) that says Tokens are computed for every Line at transcription time. They are computed for the Lines in a window, when that window is annotated. Nothing else in 0005 changes: Tokens still come from kuromoji rather than the Text Model, they are still stored on the Line, and they are still shown only for the Line that is playing.
+This supersedes the part of [ADR 0005](0005-japanese-tagging-via-morphological-analyzer.md) that says Tokens are computed for every Line at transcription time. They are computed for the Lines in a window, when that window is annotated — which [ADR 0015](0015-tokens-are-local-and-not-annotation.md) has since revised again, to the whole Transcript when it is opened. Nothing else in 0005 changes: Tokens still come from kuromoji rather than the Text Model, they are still stored on the Line, and they are still shown only for the Line that is playing.

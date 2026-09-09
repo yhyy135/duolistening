@@ -234,6 +234,9 @@ function Recommended({
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [term, setTerm] = useState("");
+  // Bumped by the ✕ to re-run the effect below without a second copy of what it
+  // does: the language has not changed, so nothing else would tell it to.
+  const [refresh, setRefresh] = useState(0);
 
   // What the reader said they are studying, else whichever language they last asked
   // about here. Both unset is the honest case rather than a default: the studied
@@ -250,11 +253,21 @@ function Recommended({
     recommendedFor(language)
       .then(setItems, () => setFailed(true))
       .finally(() => setBusy(false));
-  }, [language]);
+  }, [language, refresh]);
+
+  // Back to the day's list: the cache in itunes.ts means this is free in the normal
+  // case, same as picking a language chip is.
+  function clearSearch() {
+    setTerm("");
+    setItems(null);
+    setRefresh((generation) => generation + 1);
+  }
 
   function choose(code: LanguageCode) {
-    setItems(null);
-    setTerm("");
+    // Through clearSearch, so the chip already showing as chosen still reloads. Its
+    // own setLanguage is a no-op in that case, the effect's deps never change, and
+    // the list it just emptied would stay empty for as long as the screen is open.
+    clearSearch();
     setLanguage(code);
     try {
       localStorage.setItem(DISCOVER_KEY, code);
@@ -304,11 +317,23 @@ function Recommended({
 
       {language && (
         <form onSubmit={(event) => void search(event)}>
-          <input
-            value={term}
-            placeholder={t("discover.searchPlaceholder")}
-            onChange={(event) => setTerm(event.target.value)}
-          />
+          <span className="search-field">
+            <input
+              value={term}
+              placeholder={t("discover.searchPlaceholder")}
+              onChange={(event) => setTerm(event.target.value)}
+            />
+            {term && (
+              <button
+                type="button"
+                className="clear"
+                aria-label={t("discover.clearSearch")}
+                onClick={clearSearch}
+              >
+                ✕
+              </button>
+            )}
+          </span>
           <button disabled={busy}>{t("discover.search")}</button>
         </form>
       )}

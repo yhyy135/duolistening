@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Token, Transcript } from "../shared/model.ts";
+import type { Transcript } from "../shared/model.ts";
 import {
   BLOCK_LINES,
   createAnnotator,
@@ -29,17 +29,6 @@ const translateEverything = (prompt: string) =>
     i: Number(match[1]),
     t: `translated:${match[2]}`,
   }));
-
-const stubTokenizer = () => {
-  const calls: string[] = [];
-  return {
-    calls,
-    tokenize: (text: string): Token[] => {
-      calls.push(text);
-      return [{ surface: text, reading: "よみ", partOfSpeech: "noun" }];
-    },
-  };
-};
 
 const lines = (count: number): Transcript =>
   Array.from({ length: count }, (_, index) => ({
@@ -107,85 +96,27 @@ test("survives a reply that is not the shape it asked for", async () => {
   );
 });
 
-test("adds tokens for Japanese", async () => {
-  const tokenizer = stubTokenizer();
-  const annotator = createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    tokenizer: async () => tokenizer,
-  });
-
-  const result = await annotator.annotate(lines(2), japanese);
-
-  assert.deepEqual(tokenizer.calls, ["台詞0", "台詞1"]);
-  assert.equal(result[0]?.tokens?.[0]?.reading, "よみ");
-});
-
-test("keeps Tokens off the Words it was handed, rather than merging the two", async () => {
-  // Word is ASR timing, Token is morphology, and for Japanese their boundaries
-  // disagree; a Line carries both arrays whole and reconciles them at render time.
-  const annotator = createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    tokenizer: async () => stubTokenizer(),
-  });
+test("translates, and tokenizes nothing — Tokens are the player's now (ADR 0015)", async () => {
+  const textModel = stubTextModel(translateEverything);
   const words = [{ text: "台詞", startSec: 0, endSec: 0.5 }];
-
-  const result = await annotator.annotate(
+  const result = await createAnnotator({ textModel }).annotate(
     [{ startSec: 0, endSec: 1, text: "台詞0", words }],
     japanese,
   );
 
+  assert.equal(result[0]?.translation, "translated:台詞0");
+  assert.equal(result[0]?.tokens, undefined);
+  // Word is ASR timing and Token is morphology; nothing here touches either.
   assert.deepEqual(result[0]?.words, words);
-  assert.equal(result[0]?.tokens?.length, 1);
 });
 
-test("detects Japanese from the text when no target language is set", async () => {
-  const tokenizer = stubTokenizer();
+test("names no source language when the user never set one", async () => {
   const textModel = stubTextModel(translateEverything);
-  const annotator = createAnnotator({ textModel, tokenizer: async () => tokenizer });
-
-  // Kana is what gives Japanese away: kanji alone could be Chinese.
   const kana: Transcript = [{ startSec: 0, endSec: 1, text: "これは日本語です" }];
-  const result = await annotator.annotate(kana, { nativeLanguage: "zh-CN" });
+  await createAnnotator({ textModel }).annotate(kana, { nativeLanguage: "zh-CN" });
 
-  assert.deepEqual(tokenizer.calls, ["これは日本語です"]);
-  assert.equal(result[0]?.tokens?.[0]?.reading, "よみ");
-  // Nothing claims a source language the user never named — the model reads it
-  // off the lines, which is the whole point of leaving the setting empty.
+  // The model reads it off the lines, which is the whole point of leaving it empty.
   assert.match(textModel.prompts[0] as string, /^Translate each numbered line into /);
-});
-
-test("leaves the tokenizer unbuilt for non-Japanese text with no target language", async () => {
-  // Which is the whole reason it arrives as a thunk: in a browser, building it is
-  // a download of tens of megabytes (ADR 0008).
-  let built = 0;
-  const result = await createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    tokenizer: async () => {
-      built++;
-      return stubTokenizer();
-    },
-  }).annotate([{ startSec: 0, endSec: 1, text: "Une phrase en français." }], {
-    nativeLanguage: "en",
-  });
-
-  assert.equal(built, 0);
-  assert.equal(result[0]?.tokens, undefined);
-});
-
-test("leaves tokens off entirely for other target languages", async () => {
-  const tokenizer = stubTokenizer();
-  const annotator = createAnnotator({
-    textModel: stubTextModel(translateEverything),
-    tokenizer: async () => tokenizer,
-  });
-
-  const result = await annotator.annotate(lines(2), {
-    nativeLanguage: "zh-CN",
-    targetLanguage: "en",
-  });
-
-  assert.deepEqual(tokenizer.calls, []);
-  assert.equal(result[0]?.tokens, undefined);
 });
 
 test("returns new lines rather than editing the ones it was handed", async () => {

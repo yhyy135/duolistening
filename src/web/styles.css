@@ -414,9 +414,48 @@ main {
   gap: 0.5rem;
   margin-top: 0.4rem;
 }
-.discover form input {
+/* A flex container of one, not a plain wrapper: the touch floor below can make the
+   Search button next to this taller than the input's own height, and form's stretch
+   only reaches direct children. Nesting the flex context is what lets the input
+   stretch to match it the same way it did before this had a wrapper at all — which
+   is also what keeps the ✕, centred on this box, centred on the input itself. */
+.discover .search-field {
+  position: relative;
+  display: flex;
   flex: 1;
   min-width: 0;
+}
+.discover .search-field input {
+  flex: 1;
+  min-width: 0;
+  /* Room for the ✕ so a long search term never runs under it. */
+  padding-right: 2.2rem;
+}
+/* The 44px touch floor further down is sized for a control the flex row can grow
+   to fit; this one has to fit inside a text input that keeps its own height, so it
+   stays small — a class beats that rule's specificity outright, no !important
+   needed. */
+.discover .search-field .clear {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  transform: translateY(-50%);
+  width: 1.6em;
+  height: 1.6em;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--dim);
+  border-radius: 50%;
+  line-height: 1;
+}
+.discover .search-field .clear:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .suggestions {
@@ -1005,6 +1044,14 @@ button.ask {
 .settings .field-row button {
   flex: none;
   white-space: nowrap;
+}
+/* Replaces `type="password"` (see settings.tsx's header comment for why). Safari,
+   Chrome and Firefox 126+ support the property; below that Firefox has nothing
+   equivalent and shows the key in the clear — accepted, since this project's CSS
+   floor is already Firefox 120 for `light-dark()`, so 120–125 was already a step
+   down and this only widens that step. */
+.settings .field-row input.masked {
+  -webkit-text-security: disc;
 }
 
 .settings .actions {

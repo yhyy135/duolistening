@@ -14,11 +14,11 @@ import {
   type Token,
   type Transcript,
 } from "../shared/model.ts";
-import { type Position, locate, tokenWords, wordSlices } from "../shared/locate.ts";
+import { type Position, locate, sweepState, tokenWords, wordSlices } from "../shared/locate.ts";
 import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
 import { Icon } from "./icons.tsx";
 import { retryImport, type ImportProgress } from "./import.ts";
-import { buildAnnotator, buildImportDeps } from "./pipeline.ts";
+import { buildAnnotator, buildImportDeps, japaneseTokenizer } from "./pipeline.ts";
 import { proxyUrl } from "./proxy.ts";
 import {
   flushPosition,
@@ -384,14 +384,15 @@ export function PlayerScreen({ id }: { id: string }) {
     };
   }, [data, id]);
 
-  // ---------------------------------------------------------------- translation
+  // ---------------------------------------------------------------- annotation
 
   /**
-   * One per Settings, not one per window: the kuromoji dictionary is a download.
+   * One per Settings, not one per window.
    *
-   * Null when no Text Model is configured, and the effect below then does nothing at
-   * all — a Transcript restored from a backup still shows its Lines, untranslated,
-   * instead of putting a failed request beside every one of them.
+   * Null when no Text Model is configured, and the translation effect then does
+   * nothing at all — a Transcript restored from a backup still shows its Lines,
+   * untranslated, instead of putting a failed request beside every one of them. The
+   * Tokens below are unaffected by that: kuromoji is local (ADR 0015).
    */
   const annotator = useMemo(
     () => (settings && slotConfigured(settings.textModel) ? buildAnnotator(settings) : null),
@@ -399,6 +400,11 @@ export function PlayerScreen({ id }: { id: string }) {
   );
   /** Which blocks have been sent to the model on this visit — see `nextWindow`. */
   const asked = useRef(new Set<number>());
+  /**
+   * One writer to the Transcript at a time. Both effects below read the whole thing,
+   * merge into their copy and write it back, so two of them in flight would lose
+   * whichever landed first — and tokenizing takes it as well as translating.
+   */
   const busy = useRef(false);
   /** Bumped when a window lands, which is what asks for the one after it. */
   const [pass, setPass] = useState(0);
@@ -409,12 +415,59 @@ export function PlayerScreen({ id }: { id: string }) {
    */
   const block = Math.floor(Math.max(0, position.lineIndex) / BLOCK_LINES);
   const [translating, setTranslating] = useState(false);
-  const [translationError, setTranslationError] = useState<string | null>(null);
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
 
   useEffect(() => {
     asked.current = new Set();
-    setTranslationError(null);
+    setAnnotationError(null);
   }, [id]);
+
+  /**
+   * Japanese Tokens — furigana and part-of-speech colouring — computed here rather
+   * than during translation (ADR 0015). kuromoji runs in this browser against a
+   * dictionary it downloads once: no key, no request, nothing to wait for but itself.
+   * So it does not ride on the Text Model's latency, and a reader who has configured
+   * only a proxy still gets readings over the Lines they are studying.
+   *
+   * Whether the episode is Japanese is decided over the whole Transcript, never over
+   * the window being translated: a window with no kana in it is not evidence.
+   *
+   * Once for the whole Transcript, not per window — the expensive half is the
+   * dictionary, and tokenizing eight hundred Lines after it is milliseconds. The guard
+   * is the Lines themselves, so a Transcript that already carries Tokens (restored
+   * from a backup, or read back after a previous visit) loads nothing at all.
+   */
+  useEffect(() => {
+    const resource = data?.resource;
+    const lines = data?.transcript;
+    if (!resource || !lines?.length || busy.current) return;
+    if (lines.every((line) => line.tokens)) return;
+    if (!wantsJapanese(lines, resource.targetLanguage)) return;
+
+    busy.current = true;
+    japaneseTokenizer()
+      .then(async (tokenizer) => {
+        const tokenized = lines.map((line) => ({
+          ...line,
+          tokens: tokenizer.tokenize(line.text),
+        }));
+        setData((current) =>
+          current?.resource.id === id ? { ...current, transcript: tokenized } : current,
+        );
+        // Not `save`: that writes the Resource row too, and the only one this screen
+        // holds is whatever it read when it opened — under which a position has been
+        // written on every pause since.
+        await saveTranscript(id, tokenized);
+      })
+      .catch((failure: unknown) => setAnnotationError(reason(failure)))
+      .finally(() => {
+        busy.current = false;
+        // Nothing re-runs this effect — `data` is unchanged when the dictionary failed
+        // to load, which is what stops it retrying forever — but the translation below
+        // was turned away while this held `busy`, and this is how it is asked again.
+        setPass((n) => n + 1);
+      });
+  }, [data, id]);
 
   /**
    * Translation happens while listening rather than during the import (ADR 0011): the
@@ -467,7 +520,7 @@ export function PlayerScreen({ id }: { id: string }) {
         // when it opened, overwriting the position written under it since.
         await saveTranscript(id, merged);
       })
-      .catch((failure: unknown) => setTranslationError(reason(failure)))
+      .catch((failure: unknown) => setAnnotationError(reason(failure)))
       .finally(() => {
         busy.current = false;
         setTranslating(false);
@@ -594,9 +647,10 @@ export function PlayerScreen({ id }: { id: string }) {
   return (
     <main className="player">
       {translating && <p className="notice">{t("player.translating")}</p>}
-      {/* Beside the lyrics rather than instead of them: a rate-limited translation
-          leaves an episode that still plays and still has its Lines. */}
-      {translationError && <p className="error">{translationError}</p>}
+      {/* Beside the lyrics rather than instead of them: a rate-limited translation, or
+          a dictionary that would not load, leaves an episode that still plays and
+          still has its Lines. */}
+      {annotationError && <p className="error">{annotationError}</p>}
 
       {/* No `controls`. The native widget is three different shapes in three engines,
           none of them in this palette, and the one control this screen is about —
@@ -866,7 +920,8 @@ function LineRow({
  * Three renderings of one Line, in priority order:
  *
  * 1. The current Line with Tokens — furigana and part-of-speech colouring, shown
- *    only while it plays (ADR 0005), swept word by word via `tokenWords`.
+ *    only while it plays (ADR 0005), swept via `tokenWords`, which lights each Token
+ *    for the whole run of Words it covers rather than for the first of them.
  * 2. The current Line with Words — the same sweep over slices of the Line's own
  *    text, so the spaces between words survive (ADR 0004).
  * 3. Everything else — plain text.
@@ -893,7 +948,11 @@ function LineText({
     return (
       <>
         {line.tokens.map((token, index) => (
-          <TokenText key={index} token={token} sweep={sweep(spokenBy?.[index], wordIndex)} />
+          <TokenText
+            key={index}
+            token={token}
+            sweep={sweepState(spokenBy?.[index], wordIndex)}
+          />
         ))}
       </>
     );
@@ -902,7 +961,8 @@ function LineText({
     return (
       <>
         {slices.map((slice, index) => (
-          <span key={index} className={`word ${sweep(index, wordIndex)}`}>
+          // One slice is sounded by exactly one Word, which is the degenerate range.
+          <span key={index} className={`word ${sweepState([index, index + 1], wordIndex)}`}>
             {slice}
           </span>
         ))}
@@ -910,16 +970,6 @@ function LineText({
     );
   }
   return <>{line.text}</>;
-}
-
-/**
- * Where one piece of the current Line sits in the karaoke sweep. Empty when there is
- * no word timing to sweep with — the Line is then highlighted whole (ADR 0004), and
- * dimming its pieces would only make that look broken.
- */
-function sweep(word: number | undefined, wordIndex: number | null): string {
-  if (word === undefined || wordIndex === null) return "";
-  return word < wordIndex ? "said" : word === wordIndex ? "now" : "pending";
 }
 
 /** Furigana is native HTML; a reading is only present when the surface has kanji. */

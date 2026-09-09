@@ -3,19 +3,21 @@ import {
   LANGUAGE_NAMES,
   type LanguageCode,
   type Line,
-  type Token,
   type Transcript,
 } from "../shared/model.ts";
 
 /**
- * Fills in each Line's translation, and its tokens when the target language is
- * Japanese (ADR 0005). Whether Japanese is special is this module's business, not
- * its caller's.
+ * Fills in each Line's translation, and nothing else.
  *
  * It annotates exactly the Lines it is handed. Since ADR 0011 that is a window around
  * wherever someone is listening rather than a whole episode, and `nextWindow` below is
  * what decides which window — so this file owns both halves of the question, what to
  * translate and how.
+ *
+ * Japanese Tokens used to be computed here too, and are not any more (ADR 0015): they
+ * come from kuromoji, which is local, and had no business waiting behind a network
+ * call or being unreachable for a reader with no Text Model key. What is left of that
+ * decision here is `wantsJapanese`, which the player asks before loading a dictionary.
  *
  * Returns new Lines; never mutates the input.
  */
@@ -33,13 +35,6 @@ export interface TranslationModel {
 
 export interface AnnotatorOptions {
   textModel: TranslationModel;
-  /**
-   * Built on demand, and only for Japanese Lines: the dictionary is tens of megabytes
-   * — a download, in a browser — and with the studied language optional the caller
-   * cannot know up front whether this import needs it. Awaited at most once per
-   * annotate call.
-   */
-  tokenizer?: () => Promise<{ tokenize(text: string): Token[] }>;
   /** Lines per translation call. Default 40. */
   batchSize?: number;
   /** Batches in flight at once. Default 4 — enough to matter, low enough to stay under most providers' rate limits. */
@@ -60,15 +55,13 @@ interface TranslatedLine {
 }
 
 /**
- * Translation plus, for Japanese, morphological Tokens (ADR 0005).
- *
- * Translation goes out in batches rather than one call per Line — an episode is
- * several hundred Lines, and one call each would be slow and expensive. Batches are
- * matched back by index, not by position, because a model that drops or reorders an
- * entry must not shift every later translation onto the wrong Line.
+ * Translation, in batches rather than one call per Line — an episode is several
+ * hundred Lines, and one call each would be slow and expensive. Batches are matched
+ * back by index, not by position, because a model that drops or reorders an entry must
+ * not shift every later translation onto the wrong Line.
  */
 export function createAnnotator(options: AnnotatorOptions) {
-  const { textModel, tokenizer } = options;
+  const { textModel } = options;
   const batchSize = options.batchSize ?? 40;
   const concurrency = options.concurrency ?? 4;
 
@@ -76,19 +69,9 @@ export function createAnnotator(options: AnnotatorOptions) {
     async annotate(lines: Transcript, opts: AnnotateOptions): Promise<Transcript> {
       if (lines.length === 0) return [];
 
-      const tokenize =
-        wantsJapanese(lines, opts.targetLanguage) && tokenizer ? await tokenizer() : undefined;
-      // Tokenizing doesn't depend on translation, so it happens up front rather than
-      // in the merge below — the New-Lines rule still holds, since this itself never
-      // touches the input Lines.
-      const withTokens: Transcript = lines.map((line) => ({
-        ...line,
-        ...(tokenize && { tokens: tokenize.tokenize(line.text) }),
-      }));
-
       const translations = new Map<number, string>();
       const merge = (): Transcript =>
-        withTokens.map((line, index) => {
+        lines.map((line, index) => {
           const translation = translations.get(index);
           // A model that skipped an entry leaves that Line untranslated rather than
           // wearing its neighbour's translation.
@@ -136,9 +119,13 @@ const KANA = /[\u3040-\u30ff]/;
  * Whether these Lines want Japanese Tokens: the setting says so, or — when the studied
  * language was left unset, which is the default — the text itself does.
  *
- * Exported because the caller now hands over a window of a Transcript rather than the
- * whole of it (ADR 0011), and a window with no kana in it is not evidence of anything.
- * The decision is made once, over every Line, and passed back down.
+ * The only part of the Japanese question left in this file, and the player is now the
+ * one asking it (ADR 0015) — before deciding whether a dictionary of tens of megabytes
+ * is worth downloading, and separately from anything the Text Model is asked.
+ *
+ * Answered over a whole Transcript, never over a window (ADR 0011): a window with no
+ * kana in it is not evidence of anything, and Tokens appearing on some blocks and not
+ * their neighbours is the bug that follows.
  */
 export function wantsJapanese(lines: Transcript, targetLanguage?: LanguageCode): boolean {
   if (targetLanguage) return targetLanguage === JAPANESE;

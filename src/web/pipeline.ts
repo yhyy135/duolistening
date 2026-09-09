@@ -28,19 +28,24 @@ import { createTextModel } from "./text-model.ts";
 const DICT_PATH = "/kuromoji/dict";
 
 /**
- * Translation and Japanese Tokens, built for the player rather than for the import:
- * annotation happens a window at a time while someone is listening (ADR 0011). One
- * per screen, not one per window, so the kuromoji dictionary is downloaded at most
- * once no matter how many windows go out.
+ * Translation, built for the player rather than for the import: it happens a window at
+ * a time while someone is listening (ADR 0011).
  */
 export function buildAnnotator(settings: Settings) {
-  return createAnnotator({
-    textModel: createTextModel({ slot: settings.textModel }),
-    // A thunk, so a shelf of Spanish never pays for a Japanese dictionary — and the
-    // module behind it is a dynamic import, so it is not in the bundle either.
-    tokenizer: createJapaneseTokenizerOnce(DICT_PATH),
-  });
+  return createAnnotator({ textModel: createTextModel({ slot: settings.textModel }) });
 }
+
+/**
+ * The Japanese tokenizer, on its own and beside the Annotator rather than inside it
+ * (ADR 0015). kuromoji is local: it needs no key, no network and nothing from
+ * Settings, so it is not built per screen the way a model client is — one thunk for
+ * the page, and the dictionary is read at most once however many episodes are opened.
+ *
+ * Still a thunk, and still behind a dynamic import inside `japanese.ts`. A shelf of
+ * Spanish must not pay for a Japanese dictionary, and only the Transcript knows
+ * whether this one is worth downloading — which is `wantsJapanese`'s question.
+ */
+export const japaneseTokenizer = createJapaneseTokenizerOnce(DICT_PATH);
 
 export function buildImportDeps(settings: Settings): ImportDeps {
   const speech = createSpeechToText({ slot: settings.transcriptionModel });

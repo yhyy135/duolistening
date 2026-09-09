@@ -205,6 +205,33 @@ test("words are assigned to the segment their midpoint falls in", () => {
   );
 });
 
+test("a flat word list out of time order comes back in it", () => {
+  // The shape a provider returns when it concatenates overlapping segments: the last
+  // word of a segment starts before the one printed in front of it. `locate` asks for
+  // ordered Words, and an unordered one is quietly unreachable rather than loud.
+  const segments = toSegments(
+    body({
+      words: [
+        { word: "a", start: 0, end: 1 },
+        { word: "b", start: 4.5, end: 4.9 },
+        // The second segment's opening word, printed after the first segment's last
+        // and starting before it. Its midpoint at 4.8 puts it in the first segment.
+        { word: "c", start: 4.2, end: 5.4 },
+        { word: "d", start: 5.5, end: 6 },
+      ],
+    }),
+  );
+
+  assert.deepEqual(
+    segments[0]?.words?.map((word) => word.text),
+    ["a", "c", "b"],
+  );
+  assert.deepEqual(
+    segments[1]?.words?.map((word) => word.text),
+    ["d"],
+  );
+});
+
 test("segments come back whole when the provider gave no word timing", () => {
   // Including the real shape a provider returns when only `word` was requested.
   for (const words of [undefined, null, []]) {

@@ -1,13 +1,16 @@
 // Settings: the two model slots (ADR 0002), the byte proxy (ADR 0009), and the
 // language pair.
 //
-// The masking is gone, and it is worth saying why rather than leaving a hole where
-// it was. It existed because settings crossed a wire: the server sent `••••abcd`, a
-// value coming back still masked meant "leave the stored key alone", and a Show
-// button fetched the real one on demand. ADR 0008 removed the server, so a key never
-// leaves this browser and there is no wire to protect. What is left is shoulder
-// surfing, which is a display concern — hence a password field with a toggle that
-// asks nobody anything.
+// The masking used to protect a wire: the server sent `••••abcd`, a value coming
+// back still masked meant "leave the stored key alone", and a Show button fetched
+// the real one on demand. ADR 0008 removed the server, so a key never leaves this
+// browser and there is no wire left to protect — what remains is shoulder surfing,
+// a display concern only. It is no longer a password field over that concern,
+// though: `type="password"` inside a form with a submit handler is exactly the
+// shape Safari and Chrome watch for to offer to remember a website password, for a
+// field that has never held one. The masking is CSS now — `-webkit-text-security`
+// on a plain `type="text"` input — with autocomplete, autocorrect and
+// autocapitalize all switched off so an API key survives being typed on a phone.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -321,8 +324,10 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
 }
 
 /**
- * A key field. `type="password"` and a toggle, which is the whole of what masking
- * has to be now: the value is already here, so revealing it asks nobody anything.
+ * A key field. Always `type="text"` — never `type="password"`, which is what a
+ * browser's password manager keys off, together with the submit handler around it.
+ * Masking is `-webkit-text-security` instead (see the `.masked` rule in
+ * styles.css), so revealing the value asks nobody anything: it is already here.
  */
 function SecretInput({
   value,
@@ -336,12 +341,22 @@ function SecretInput({
   return (
     <span className="field-row">
       <input
-        type={shown ? "text" : "password"}
+        type="text"
+        className={shown ? undefined : "masked"}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
       />
-      <button type="button" className="ghost" onClick={() => setShown(!shown)}>
-        {t("settings.show")}
+      <button
+        type="button"
+        className="ghost"
+        onClick={() => setShown(!shown)}
+        aria-label={t(shown ? "settings.hide" : "settings.show")}
+      >
+        <Icon name={shown ? "eye-off" : "eye"} />
       </button>
     </span>
   );
