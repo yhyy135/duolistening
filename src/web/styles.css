@@ -1154,6 +1154,11 @@ button.ask {
 .episodes-dialog {
   max-height: 80vh;
 }
+/* One button, centred under the list it closes — there is nothing beside it to line
+   it up against any more. */
+.episodes-dialog .actions {
+  justify-content: center;
+}
 .episodes-dialog .list {
   overflow: auto;
   margin-bottom: 0.8rem;

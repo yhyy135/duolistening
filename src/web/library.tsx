@@ -30,12 +30,12 @@ import { allEntries, listResources, readSettings, remove as removeResource } fro
 const phaseKey = (phase: ImportPhase) => `phase.${phase}` as const;
 
 /**
- * How many episodes of a feed to show at once. A weekly show that has been running
- * five years answers with several hundred, and rendering all of them buries the shelf
- * under a list nobody scrolled to. The feed is parsed once and held whole — this is a
- * display cap, not a second request, so "show more" costs nothing.
+ * How many episodes of a feed to render at a time. A weekly show that has been running
+ * five years answers with several hundred, and mounting all of them is a stall on the
+ * click that opens the picker. The feed is parsed once and held whole — this is a
+ * display cap, not a second request, so the rest costs nothing but the rows.
  */
-const PAGE = 10;
+const PAGE = 20;
 
 /** mm:ss, or h:mm:ss past the hour — podcast episodes routinely run longer. */
 const formatTime = (seconds: number) =>
@@ -519,6 +519,8 @@ function ImportBox({
   const [clipped, setClipped] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLDialogElement>(null);
   const rowsRef = useRef<HTMLTableSectionElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const t = useT();
 
   // A recommendation, opened in the one episode picker this screen has rather than a
@@ -547,6 +549,26 @@ function ImportBox({
       if (key && !(key in clipped)) found[key] = pick.scrollWidth > pick.clientWidth;
     });
     if (Object.keys(found).length > 0) setClipped((current) => ({ ...current, ...found }));
+  }, [feed, shown]);
+
+  // The next page arrives when the reader reaches the end of this one. An observer
+  // rather than a scroll handler on the list: it also fires when the sentinel is
+  // already on screen, and a feed of twenty-two episodes on a tall window never
+  // scrolls — the last two would be unreachable, with nothing left to click.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setShown((at) => at + PAGE);
+      },
+      // Against the list rather than the viewport, which is what makes the margin mean
+      // anything: it is the list that scrolls, so the next page lands before the last
+      // row does.
+      { root: listRef.current, rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
   }, [feed, shown]);
 
   async function listEpisodes(feedUrl: string) {
@@ -649,7 +671,7 @@ function ImportBox({
             <p className="note">{t("library.pickEpisode")}</p>
             {/* The scroll is here and not on the dialog, so the show's name, the
                 header row and the buttons stay put while three hundred episodes move. */}
-            <div className="list">
+            <div className="list" ref={listRef}>
               <table className="episodes">
                 <thead>
                   <tr>
@@ -701,18 +723,12 @@ function ImportBox({
                   ))}
                 </tbody>
               </table>
+              {shown < feed.episodes.length && <div ref={sentinelRef} />}
             </div>
           </>
         )}
         {failure && <p className="text">{t("library.feedFailed", { reason: failure })}</p>}
         <div className="actions">
-          {feed && shown < feed.episodes.length && (
-            <button type="button" onClick={() => setShown(shown + PAGE)}>
-              {t("library.showMore", {
-                count: Math.min(PAGE, feed.episodes.length - shown),
-              })}
-            </button>
-          )}
           <button type="button" className="ghost" onClick={() => dialogRef.current?.close()}>
             {t("common.close")}
           </button>
