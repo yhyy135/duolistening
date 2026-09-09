@@ -201,7 +201,7 @@ export function LibraryScreen() {
                   }}
                 >
                   <button className="ghost danger" onClick={() => void remove(resource)}>
-                    {t("common.sure")}
+                    {t("common.confirm")}
                   </button>
                   <button className="ghost" autoFocus onClick={() => setConfirming(null)}>
                     {t("common.cancel")}

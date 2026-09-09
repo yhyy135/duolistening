@@ -24,7 +24,7 @@ const en = {
   "common.saving": "Saving…",
   "common.saved": "Saved",
   "common.delete": "Delete",
-  "common.sure": "Sure?",
+  "common.confirm": "Confirm",
   "common.cancel": "Cancel",
   "common.close": "Close",
 
@@ -151,7 +151,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "保存中…",
     "common.saved": "已保存",
     "common.delete": "删除",
-    "common.sure": "确定？",
+    "common.confirm": "确定",
     "common.cancel": "取消",
     "common.close": "关闭",
 
@@ -269,7 +269,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "儲存中…",
     "common.saved": "已儲存",
     "common.delete": "刪除",
-    "common.sure": "確定？",
+    "common.confirm": "確定",
     "common.cancel": "取消",
     "common.close": "關閉",
 
@@ -387,7 +387,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "保存中…",
     "common.saved": "保存しました",
     "common.delete": "削除",
-    "common.sure": "本当に？",
+    "common.confirm": "確定",
     "common.cancel": "キャンセル",
     "common.close": "閉じる",
 
@@ -509,7 +509,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "저장 중…",
     "common.saved": "저장됨",
     "common.delete": "삭제",
-    "common.sure": "삭제할까요?",
+    "common.confirm": "확인",
     "common.cancel": "취소",
     "common.close": "닫기",
 
@@ -631,7 +631,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "Guardando…",
     "common.saved": "Guardado",
     "common.delete": "Eliminar",
-    "common.sure": "¿Seguro?",
+    "common.confirm": "Confirmar",
     "common.cancel": "Cancelar",
     "common.close": "Cerrar",
 
@@ -754,7 +754,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "Enregistrement…",
     "common.saved": "Enregistré",
     "common.delete": "Supprimer",
-    "common.sure": "Sûr ?",
+    "common.confirm": "Confirmer",
     "common.cancel": "Annuler",
     "common.close": "Fermer",
 
@@ -877,7 +877,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     "common.saving": "Speichert…",
     "common.saved": "Gespeichert",
     "common.delete": "Löschen",
-    "common.sure": "Sicher?",
+    "common.confirm": "Bestätigen",
     "common.cancel": "Abbrechen",
     "common.close": "Schließen",
 
