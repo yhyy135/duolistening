@@ -1,7 +1,7 @@
 // The Library screen: the shelf, the one box you paste a link into, and the export
 // that is the only thing standing between a Transcript and an evicted browser.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   LANGUAGES,
   type Episode,
@@ -505,6 +505,9 @@ function ImportBox({
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [feed, setFeed] = useState<{ feedTitle: string; episodes: Episode[] } | null>(null);
+  /** Which feed the dialog is showing. Not the box above it — a recommendation opens
+      the picker without touching an input that belongs to whoever is typing in it. */
+  const [listed, setListed] = useState("");
   /** Why the list could not be fetched — shown in the dialog the list would have been. */
   const [failure, setFailure] = useState<string | null>(null);
   /** How much of the parsed feed is on screen. Reset with every feed, or the second
@@ -512,7 +515,10 @@ function ImportBox({
   const [shown, setShown] = useState(PAGE);
   /** The one episode showing its title in full, by `audioUrl`. */
   const [expanded, setExpanded] = useState<string | null>(null);
+  /** Which titles the column actually cut, by `audioUrl`. Only those get a ⋯. */
+  const [clipped, setClipped] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const rowsRef = useRef<HTMLTableSectionElement>(null);
   const t = useT();
 
   // A recommendation, opened in the one episode picker this screen has rather than a
@@ -521,10 +527,27 @@ function ImportBox({
   // any more: the picker is a modal, and it opens where the reader is already looking.
   useEffect(() => {
     if (!handed) return;
-    setUrl(handed);
     void listEpisodes(handed);
     onHandled();
   }, [handed]);
+
+  // Measured, because whether a title fits depends on the dialog's width and the
+  // reader's font: a character count is wrong in both directions, and wrong by most
+  // for the CJK titles that run out of room in half the characters. An offer to show
+  // the rest of a title that has no rest is a control that does nothing, on every row.
+  //
+  // Rows already measured are left alone, so an expanded title — which now wraps, and
+  // therefore "fits" — does not lose the ⋯ that expanded it. The ceiling is a window
+  // resized while the list is open: those rows keep the answer they were given.
+  useLayoutEffect(() => {
+    const picks = rowsRef.current?.querySelectorAll<HTMLElement>(".pick") ?? [];
+    const found: Record<string, boolean> = {};
+    picks.forEach((pick, at) => {
+      const key = feed?.episodes[at]?.audioUrl;
+      if (key && !(key in clipped)) found[key] = pick.scrollWidth > pick.clientWidth;
+    });
+    if (Object.keys(found).length > 0) setClipped((current) => ({ ...current, ...found }));
+  }, [feed, shown]);
 
   async function listEpisodes(feedUrl: string) {
     if (!settings) return onError(t("library.needsSettings"));
@@ -535,9 +558,11 @@ function ImportBox({
         proxyUrl: (target) => proxyUrl(settings.proxy, target),
       });
       setFeed(await podcast.listEpisodes(feedUrl));
+      setListed(feedUrl);
       setFailure(null);
       setShown(PAGE);
       setExpanded(null);
+      setClipped({});
     } catch (problem) {
       // Into the dialog rather than up onto the shelf, where the message sat above the
       // recommendations with nothing around it saying what had been asked for. Whether
@@ -566,7 +591,7 @@ function ImportBox({
         {
           source: {
             kind: "podcast",
-            feedUrl: url.trim(),
+            feedUrl: listed,
             episodeUrl: episode.audioUrl,
             title: episode.title,
           },
@@ -578,7 +603,9 @@ function ImportBox({
     );
     dialogRef.current?.close();
     setFeed(null);
-    setUrl("");
+    // Only if the box is what opened this list. A recommendation never filled it, and
+    // emptying it would throw away a link somebody had typed and not imported yet.
+    if (url.trim() === listed) setUrl("");
   }
 
   return (
@@ -630,7 +657,7 @@ function ImportBox({
                     <th className="dur">{t("library.columnDuration")}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody ref={rowsRef}>
                   {feed.episodes.slice(0, shown).map((episode) => (
                     <tr
                       key={episode.audioUrl}
@@ -648,17 +675,21 @@ function ImportBox({
                         >
                           {episode.title}
                         </button>
-                        <button
-                          type="button"
-                          className="expand"
-                          aria-label={t("library.fullTitle")}
-                          aria-expanded={expanded === episode.audioUrl}
-                          onClick={() =>
-                            setExpanded(expanded === episode.audioUrl ? null : episode.audioUrl)
-                          }
-                        >
-                          ⋯
-                        </button>
+                        {clipped[episode.audioUrl] && (
+                          <button
+                            type="button"
+                            className="expand"
+                            aria-label={t("library.fullTitle")}
+                            aria-expanded={expanded === episode.audioUrl}
+                            onClick={() =>
+                              setExpanded(
+                                expanded === episode.audioUrl ? null : episode.audioUrl,
+                              )
+                            }
+                          >
+                            ⋯
+                          </button>
+                        )}
                         {episode.publishedAt && (
                           <span className="when">{episode.publishedAt.slice(0, 10)}</span>
                         )}
