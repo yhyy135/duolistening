@@ -4,7 +4,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   LANGUAGES,
-  LANGUAGE_NAMES,
   type Episode,
   type ImportPhase,
   type LanguageCode,
@@ -13,7 +12,7 @@ import {
 } from "../shared/model.ts";
 import { backupFilename, buildBackup, parseBackup, planImport } from "./backup.ts";
 import { Icon } from "./icons.tsx";
-import { useT } from "./i18n.ts";
+import { useLanguageName, useT } from "./i18n.ts";
 import {
   LANGUAGE_LEARNING_GENRE,
   MARKETS,
@@ -54,6 +53,7 @@ export function LibraryScreen() {
   /** A feed the recommendations sent over, for the box below to open. */
   const [handed, setHanded] = useState("");
   const t = useT();
+  const languageOf = useLanguageName();
 
   // Which imports this tab is actually driving. An import lives in the page now
   // (ADR 0008), so this is the whole of what used to need an EventSource per job,
@@ -156,8 +156,10 @@ export function LibraryScreen() {
                 <span className="meta">
                   {formatTime(resource.durationSec)}
                   {" · "}
-                  {resource.targetLanguage ?? t("library.autoLanguage")}→
-                  {resource.nativeLanguage}
+                  {resource.targetLanguage
+                    ? languageOf(resource.targetLanguage)
+                    : t("library.autoLanguage")}
+                  →{languageOf(resource.nativeLanguage)}
                   {resource.lastPositionSec
                     ? ` · ${t("library.resume", { time: formatTime(resource.lastPositionSec) })}`
                     : ""}
@@ -229,6 +231,7 @@ function Recommended({
   onPick: (feedUrl: string) => void;
 }) {
   const t = useT();
+  const languageOf = useLanguageName();
   const [language, setLanguage] = useState<LanguageCode | null>(null);
   const [items, setItems] = useState<PodcastSuggestion[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -310,7 +313,7 @@ function Recommended({
             aria-pressed={code === language}
             onClick={() => choose(code)}
           >
-            {LANGUAGE_NAMES[code]}
+            {languageOf(code)}
           </button>
         ))}
       </div>

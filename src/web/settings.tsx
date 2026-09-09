@@ -15,7 +15,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   LANGUAGES,
-  LANGUAGE_NAMES,
   type LanguageCode,
   type ModelSlot,
   type ProxySettings,
@@ -25,7 +24,7 @@ import {
 } from "../shared/model.ts";
 import { Icon } from "./icons.tsx";
 import { t as translate } from "../shared/i18n.ts";
-import { rememberLocale, useT } from "./i18n.ts";
+import { rememberLocale, useLanguageName, useT } from "./i18n.ts";
 import { checkSettings } from "./model-check.ts";
 import { checkProxy, type ProxyCheck } from "./proxy.ts";
 import { decodeSettings, encodeSettings } from "./settings-transfer.ts";
@@ -742,9 +741,9 @@ function Proxy({
   );
 }
 
-/** Each language's own name for itself — shown beside the English name (which is
-    what LANGUAGE_NAMES is really for: naming the language to the Text Model), so
-    someone scanning the list finds their language by its own script. */
+/** Each language's own name for itself — shown beside the name the interface would
+    write, so someone scanning the list finds their language by its own script whatever
+    language the interface happens to be in. */
 const NATIVE_NAMES: Record<LanguageCode, string> = {
   ja: "日本語",
   en: "English",
@@ -756,10 +755,9 @@ const NATIVE_NAMES: Record<LanguageCode, string> = {
   de: "Deutsch",
 };
 
-function languageLabel(code: LanguageCode): string {
+function languageLabel(code: LanguageCode, named: string): string {
   const native = NATIVE_NAMES[code];
-  const english = LANGUAGE_NAMES[code];
-  return native === english ? native : `${native} - ${english}`;
+  return native === named ? native : `${native} - ${named}`;
 }
 
 /** With `auto`, an empty option is offered and an empty value means "detect it". */
@@ -772,6 +770,7 @@ function LanguageSelect({
   auto?: string;
   onChange: (code: LanguageCode | undefined) => void;
 }) {
+  const languageOf = useLanguageName();
   return (
     <select
       value={value ?? ""}
@@ -780,7 +779,7 @@ function LanguageSelect({
       {auto !== undefined && <option value="">{auto}</option>}
       {LANGUAGES.map((code) => (
         <option key={code} value={code}>
-          {languageLabel(code)}
+          {languageLabel(code, languageOf(code))}
         </option>
       ))}
     </select>

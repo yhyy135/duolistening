@@ -3,7 +3,7 @@
 // too. The strings themselves live in shared/i18n.ts — the server needs one of them.
 
 import { createContext, useCallback, useContext } from "react";
-import { t, type StringKey } from "../shared/i18n.ts";
+import { languageName, t, type StringKey } from "../shared/i18n.ts";
 import { LANGUAGES, type LanguageCode } from "../shared/model.ts";
 
 /**
@@ -64,4 +64,13 @@ export function useT(): (key: StringKey, vars?: Record<string, string | number>)
     (key: StringKey, vars?: Record<string, string | number>) => t(locale, key, vars),
     [locale],
   );
+}
+
+/**
+ * A language's name in the interface's own language — the same shape as `useT`, and
+ * `useCallback` for the same reason stated there.
+ */
+export function useLanguageName(): (code: LanguageCode) => string {
+  const locale = useContext(LocaleContext);
+  return useCallback((code: LanguageCode) => languageName(code, locale), [locale]);
 }

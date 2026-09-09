@@ -6,7 +6,7 @@
 // ask-AI prompt is written in the native language and sent from the server, and
 // having two copies of that template is how they drift apart.
 
-import type { LanguageCode } from "./model.ts";
+import { LANGUAGE_NAMES, type LanguageCode } from "./model.ts";
 
 type Vars = Record<string, string | number>;
 
@@ -992,3 +992,33 @@ export function t(locale: LanguageCode, key: StringKey, vars?: Vars): string {
     ? text.replace(/\{(\w+)\}/g, (whole, name: string) => String(vars[name] ?? whole))
     : text;
 }
+
+/**
+ * A language's name as the reader's own interface would write it — "日语" in a
+ * Simplified Chinese interface, "japonais" in a French one.
+ *
+ * `Intl.DisplayNames` rather than eight more names in each of the eight tables above:
+ * this is one of the few pieces of UI text every browser already ships, in every
+ * language, and sixty-four hand-written entries would be sixty-four entries to keep
+ * in step for nothing. `LANGUAGE_NAMES` cannot do this job — it is English on purpose,
+ * because its other caller names the language to the Text Model in a prompt.
+ *
+ * The two Chinese codes are asked for by *script*, not by the region they carry:
+ * `of("zh-CN")` answers "中文（中国）" and `of("zh-TW")` "中文（台湾）", which name
+ * countries where this setting means Simplified against Traditional. `zh-Hans` and
+ * `zh-Hant` answer "简体中文" and "繁体中文", which is both correct and what the
+ * English table has always called them.
+ */
+export function languageName(code: LanguageCode, locale: LanguageCode): string {
+  const subtag = SCRIPT_SUBTAGS[code] ?? code;
+  const named = new Intl.DisplayNames([locale], { type: "language" }).of(subtag);
+  // `of` hands back the subtag itself when it has no data for it, and a button
+  // labelled "zh-Hant" is worse than one labelled in English.
+  return !named || named === subtag ? LANGUAGE_NAMES[code] : named;
+}
+
+/** Only the two that would otherwise be named after a country. */
+const SCRIPT_SUBTAGS: Partial<Record<LanguageCode, string>> = {
+  "zh-CN": "zh-Hans",
+  "zh-TW": "zh-Hant",
+};

@@ -9,7 +9,13 @@ export type LanguageCode = (typeof LANGUAGES)[number];
 /** Japanese unlocks the Token features (furigana, part-of-speech colouring). */
 export const JAPANESE = "ja" satisfies LanguageCode;
 
-/** Shown in the settings dropdowns, and named to the Text Model in prompts. */
+/**
+ * English on purpose: this is the name handed to the Text Model in a translation
+ * prompt, where a stable one matters more than a localised one. It is **not** for
+ * labelling the interface — `languageName` in shared/i18n.ts writes a language's name
+ * in whatever language the reader is reading, and this is only its last-resort
+ * fallback.
+ */
 export const LANGUAGE_NAMES: Record<LanguageCode, string> = {
   ja: "Japanese",
   en: "English",
