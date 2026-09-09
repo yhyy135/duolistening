@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { Episode } from "../shared/model.ts";
+import { proxyDetail } from "./proxy.ts";
 
 /**
  * Reads an RSS feed and lists its episodes.
@@ -43,7 +44,14 @@ export function createPodcastFeed(options: PodcastFeedOptions): PodcastFeed {
         throw new Error(`Could not reach ${feedUrl}`, { cause });
       }
       if (!response.ok) {
-        throw new Error(`Feed request failed with ${response.status}`);
+        // The proxy says whose fault it is in the body, and a bare status throws that
+        // away: a feed host refusing us (502 upstream answered 403), a proxy narrowed
+        // by ALLOWED_HOSTS, and a mistyped key all reach this line as a number, and
+        // only one of the three is something the reader can do anything about.
+        const detail = await proxyDetail(response);
+        throw new Error(
+          `Feed request failed with ${response.status}${detail ? `: ${detail}` : ""}`,
+        );
       }
       return parseFeed(await response.text());
     },

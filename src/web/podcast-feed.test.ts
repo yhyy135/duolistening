@@ -138,6 +138,39 @@ describe("fetching a feed", () => {
     await assert.rejects(podcast.listEpisodes("https://example.com/feed.xml"), /500/);
   });
 
+  it("carries the proxy's own explanation, not just its status", async () => {
+    // The real one this was written for: japanesepod101.com sits behind a CloudFront
+    // WAF that refuses the Worker's address range, so the proxy reaches it and is
+    // turned away. "502" alone reads as "this app is broken"; the body is what says
+    // it was the origin refusing, which no setting on this side can fix.
+    const podcast = createPodcastFeed({
+      proxyUrl,
+      fetch: spy("upstream answered 403", { status: 502 }).impl,
+    });
+    await assert.rejects(
+      podcast.listEpisodes("https://example.com/feed.xml"),
+      /502.*upstream answered 403/,
+    );
+  });
+
+  it("never lets the proxy key into the message it puts on screen", async () => {
+    // Point `proxy.baseUrl` at something that is not this Worker — a typo, a plain web
+    // server — and its error page may quote the request line back, key and all. This
+    // message is shown on screen and pasted into bug reports.
+    const podcast = createPodcastFeed({
+      proxyUrl,
+      fetch: spy("Cannot GET /?k=shared-secret&url=https://example.com/feed.xml", {
+        status: 404,
+      }).impl,
+    });
+    await assert.rejects(podcast.listEpisodes("https://example.com/feed.xml"), (error) => {
+      assert.ok(error instanceof Error);
+      assert.doesNotMatch(error.message, /shared-secret/);
+      assert.match(error.message, /k=\*\*\*/);
+      return true;
+    });
+  });
+
   it("names the feed in a failure, not the proxy URL carrying the key", async () => {
     const fetch: typeof globalThis.fetch = () => Promise.reject(new Error("dns"));
     const podcast = createPodcastFeed({ proxyUrl, fetch });

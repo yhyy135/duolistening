@@ -242,13 +242,35 @@ async function get(
   // The proxy turns a 206 into a 200 on the way through, so anything that is not ok
   // is a failure it is describing in the body — its own, or the origin's.
   if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).slice(0, 500);
+    const detail = await proxyDetail(response);
     throw new ProxyError(
       reasonFor(response.status, detail),
       `The proxy answered ${response.status}: ${detail}`,
     );
   }
   return response;
+}
+
+/**
+ * The explanation a failed proxy response carries in its body — "upstream answered
+ * 403", "host not on ALLOWED_HOSTS: x", "bad or missing ?k". Worth reading rather
+ * than reporting the status alone: those three are somebody else's site refusing us,
+ * a proxy configured too narrowly, and a mistyped key, and they have nothing in
+ * common except the number the reader would otherwise be shown.
+ *
+ * The `k=` scrub is why this is one function and not two lines at each call site. The
+ * result goes into a message that is shown on screen and pasted into bug reports, and
+ * the URL it answers carries the proxy key in its query string — so an endpoint that
+ * is not this Worker, reached by a typo in the base URL, can quote the request line
+ * back and put the key in that message. Same rule as the error above this one, which
+ * names the feed rather than the proxy URL wrapping it, for the same reason.
+ */
+export async function proxyDetail(response: Response): Promise<string> {
+  const body = await response.text().catch(() => "");
+  return body
+    .replace(/([?&]k=)[^&\s"'<]*/gi, "$1***")
+    .trim()
+    .slice(0, 500);
 }
 
 /**

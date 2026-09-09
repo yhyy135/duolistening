@@ -2,7 +2,7 @@ import { slotConfigured, type Settings } from "../shared/model.ts";
 import { createAnnotator } from "./annotate.ts";
 import type { ImportDeps } from "./import.ts";
 import { createJapaneseTokenizerOnce } from "./japanese.ts";
-import { proxyUrl, sliceUrls } from "./proxy.ts";
+import { proxyDetail, proxyUrl, sliceUrls } from "./proxy.ts";
 import { createSpeechToText } from "./speech-to-text.ts";
 import * as store from "./store.ts";
 import { transcribe } from "./transcribe.ts";
@@ -84,7 +84,12 @@ export function buildImportDeps(settings: Settings): ImportDeps {
     async fetchAudio(episodeUrl) {
       const response = await fetch(proxyUrl(settings.proxy, episodeUrl));
       if (!response.ok) {
-        throw new Error(`Could not fetch the audio: ${response.status}`);
+        // Same reason as the feed listing: the host that refuses the feed refuses the
+        // audio too, and "502" alone does not say that it was the origin refusing.
+        const detail = await proxyDetail(response);
+        throw new Error(
+          `Could not fetch the audio: ${response.status}${detail ? `: ${detail}` : ""}`,
+        );
       }
       // Relabelled from its magic bytes on the way in, never from the extension it
       // was named with. Chrome sniffs content and would hide a wrong type; Safari
