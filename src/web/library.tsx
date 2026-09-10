@@ -20,7 +20,7 @@ import {
   searchPodcasts,
   type PodcastSuggestion,
 } from "./itunes.ts";
-import { startImport, retryImport, type ImportProgress } from "./import.ts";
+import { isImporting, startImport, retryImport, type ImportProgress } from "./import.ts";
 import { buildImportDeps } from "./pipeline.ts";
 import { createPodcastFeed } from "./podcast-feed.ts";
 import { proxyUrl } from "./proxy.ts";
@@ -55,14 +55,6 @@ export function LibraryScreen() {
   const t = useT();
   const languageOf = useLanguageName();
 
-  // Which imports this tab is actually driving. An import lives in the page now
-  // (ADR 0008), so this is the whole of what used to need an EventSource per job,
-  // a map of unsubscribes closed on unmount, and a three-second timer to notice a
-  // stream that had gone quiet. A reload abandons an import rather than orphaning
-  // one, and an abandoned Resource is simply one in a running phase that nothing
-  // here is running — no heuristic left to get wrong.
-  const driving = useRef(new Set<string>());
-
   const refresh = () =>
     listResources().then(setResources, (failure: unknown) => setError(reason(failure)));
 
@@ -78,14 +70,12 @@ export function LibraryScreen() {
     id: string,
     work: (report: (p: ImportProgress) => void) => Promise<void>,
   ) {
-    driving.current.add(id);
     setError(null);
     try {
       await work((progress) => setRunning((current) => ({ ...current, [id]: progress })));
     } catch (failure) {
       setError(reason(failure));
     } finally {
-      driving.current.delete(id);
       setRunning((current) => {
         const { [id]: _done, ...rest } = current;
         return rest;
@@ -139,9 +129,11 @@ export function LibraryScreen() {
           const progress = live?.progress;
           const failureReason = resource.failureReason;
           // Failed, or left in a running phase by a reload that took its import with
-          // it. Both need the same way out.
-          const stalled =
-            phase !== "ready" && (phase === "failed" || !driving.current.has(resource.id));
+          // it. Both need the same way out — and neither is true of an import that is
+          // running right now, which is why this asks `import.ts` rather than a Set of
+          // its own: this screen never knew about a transcription started from the
+          // player, and offered a Resume that billed the episode a second time.
+          const stalled = phase !== "ready" && !isImporting(resource.id);
           // Stored audio is the real answer, whatever the phase says: an import that
           // downloaded an episode and then failed to transcribe it left something that
           // plays, and refusing to open it would be withholding bytes we already have.

@@ -17,7 +17,7 @@ import {
 import { type Position, locate, sweepState, tokenWords, wordSlices } from "../shared/locate.ts";
 import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
 import { Icon } from "./icons.tsx";
-import { retryImport, type ImportProgress } from "./import.ts";
+import { isImporting, retryImport, type ImportProgress } from "./import.ts";
 import { buildAnnotator, buildImportDeps, japaneseTokenizer } from "./pipeline.ts";
 import { proxyUrl } from "./proxy.ts";
 import {
@@ -633,8 +633,13 @@ export function PlayerScreen({ id }: { id: string }) {
 
   const { resource, transcript, audioUrl } = data;
   // Nothing is importing this episode any more, so an offer to transcribe it is real
-  // rather than a second run of something already under way.
-  const resting = resource.phase === "untranscribed" || resource.phase === "failed";
+  // rather than a second run of something already under way. The phase alone cannot
+  // say that — it reads the same whether an import is running or was abandoned by a
+  // reload — so `isImporting` is the half that knows, and the guard inside `run` is
+  // what catches the click that beat this to it.
+  const resting =
+    (resource.phase === "untranscribed" || resource.phase === "failed") &&
+    !isImporting(resource.id);
   const canTranscribe = slotConfigured(settings?.transcriptionModel);
   const seek = (line: Line) => {
     const audio = audioRef.current;

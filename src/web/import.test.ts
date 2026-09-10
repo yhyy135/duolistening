@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Resource, Transcript } from "../shared/model.ts";
-import { retryImport, startImport, type ImportDeps, type ImportProgress } from "./import.ts";
+import {
+  isImporting,
+  retryImport,
+  startImport,
+  type ImportDeps,
+  type ImportProgress,
+} from "./import.ts";
 
 const bare: Transcript = [
   { text: "one", startSec: 0, endSec: 5 },
@@ -272,4 +278,58 @@ test("a transcription that fails still leaves an episode that plays", async () =
   assert.equal(resource.hasAudio, true);
   assert.match(resource.failureReason ?? "", /transcription endpoint/);
   assert.equal(store.state.audio?.type, "audio/mpeg");
+});
+
+test("one episode is never imported twice at once", async () => {
+  // The shape this guards is not hypothetical: a transcription started from the player
+  // left the shelf offering a Resume beside it, and taking it put two POSTs to
+  // `/audio/transcriptions` in flight for one episode. Neither run can see the other
+  // in the store, because both read it before either has a Transcript to write.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const {
+    deps: d,
+    called,
+    store,
+  } = deps({
+    transcribe: async () => {
+      called.push("transcribe");
+      await held;
+      return bare;
+    },
+  });
+  const resting: Resource = {
+    id: "r1",
+    source,
+    title: "ep",
+    durationSec: 0,
+    nativeLanguage: "zh-CN",
+    importedAt: "2026-09-08T00:00:00.000Z",
+    phase: "untranscribed",
+  };
+
+  const first = retryImport(d, resting, () => undefined);
+  // Long enough for the first run to reach the model call it is now parked on.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(isImporting("r1"), true);
+
+  // Raced rather than awaited: without the guard the second run parks on the same
+  // promise the first one is holding, and a test that hangs is not a test that failed.
+  const second = await Promise.race([
+    retryImport(d, resting, () => undefined).then(
+      () => "a second run finished",
+      (failure: unknown) => (failure instanceof Error ? failure.message : String(failure)),
+    ),
+    new Promise((resolve) => setTimeout(() => resolve("a second run is under way"), 20)),
+  ]);
+  assert.match(second as string, /already being imported/);
+
+  release();
+  const resource = await first;
+
+  assert.deepEqual(called, ["fetchAudio", "transcribe"], "one transcription, one bill");
+  assert.equal(resource.phase, "ready");
+  // And the registry lets go afterwards, or the episode could never be retried again.
+  assert.equal(isImporting("r1"), false);
+  assert.deepEqual(store.state.transcript, bare);
 });

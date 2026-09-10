@@ -73,6 +73,30 @@ export interface StartInput {
   durationSec?: number;
 }
 
+/**
+ * Which Resources this page is importing right now.
+ *
+ * The shelf used to answer that from a Set inside its own component, which the
+ * player's Retry transcription never joined — so an episode being transcribed from
+ * the player was offered a Resume beside it on the shelf, and taking it billed the
+ * same episode a second time. Measured before this existed: two POSTs to
+ * `/audio/transcriptions` for one episode, provably in flight at once. The store is
+ * no help there either, because both runs read it before either has anything to
+ * write.
+ *
+ * It lives here because `run` is where every entry point already converges, and one
+ * registry is the fix for a bug that was two registries disagreeing.
+ *
+ * Per page, like everything else in this architecture (ADR 0008): a second tab is a
+ * second copy of all of this and shares only IndexedDB. Covering that means a lease
+ * written to the store and refreshed while an import runs, which is a write every few
+ * seconds against a tab nobody has opened.
+ */
+const running = new Set<ResourceId>();
+
+/** Whether this page is importing that Resource — what makes an offer to resume real. */
+export const isImporting = (id: ResourceId): boolean => running.has(id);
+
 /** Starts a new import. The Resource appears on the shelf before any work begins. */
 export async function startImport(
   deps: ImportDeps,
@@ -116,6 +140,14 @@ async function run(
   start: Resource,
   onProgress: (state: ImportProgress) => void,
 ): Promise<Resource> {
+  // Not "already finished" — already *going*, which the phase cannot say: a Resource
+  // reads `transcribing` whether something is driving it or whether a reload walked
+  // away from it, and only this knows which.
+  if (running.has(start.id)) {
+    throw new Error("That episode is already being imported. Wait for it to finish.");
+  }
+  running.add(start.id);
+
   // A retry clears last time's reason as it starts, so the shelf never shows a stale
   // failure beside this run's progress.
   let current: Resource = { ...start, failureReason: undefined };
@@ -185,6 +217,8 @@ async function run(
     await deps.store.save({ resource: current }).catch(() => undefined);
     onProgress({ phase: "failed" });
     return current;
+  } finally {
+    running.delete(start.id);
   }
 }
 
