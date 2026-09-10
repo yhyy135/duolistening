@@ -240,6 +240,20 @@ button.theme:hover:not(:disabled) {
     align-items: center;
     min-height: 44px;
   }
+  /* iOS Safari zooms the page in when it focuses a text field computing under 16px,
+     and does not zoom back out when the field is left — so one tap on the feed box
+     leaves the whole app oversized until the reader pinches it back by hand. Every
+     field inherits body's 15px, one pixel under the line. The fix belongs here rather
+     than on the two boxes that were reported, because the size that triggers it is
+     set once for all of them; and it belongs under (hover: none) rather than
+     everywhere, because 16px is the phone's right size and 15px is the desktop's.
+     The alternative — `maximum-scale=1` on the viewport — buys the same thing by
+     taking pinch-zoom away from everyone, on a page of small foreign-language text. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 main {
@@ -1187,6 +1201,17 @@ button.ask {
   word-break: break-all;
   resize: vertical;
   margin-bottom: 0.8rem;
+}
+/* The one field the floor above cannot reach — its own rule is more specific and comes
+   later — and it is the field most worth reaching, because pasting a configuration
+   string onto a second device is a phone flow by definition. The height that paid for
+   0.7rem is not what it looks like: `rows` fixes this box at six lines and the string
+   scrolls inside it either way, so the whole cost here is six lines of 16px instead of
+   six of 11.2px, about 44px. */
+@media (hover: none) {
+  .transfer-dialog .cipher {
+    font-size: 16px;
+  }
 }
 .ask-dialog .actions {
   display: flex;
