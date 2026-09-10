@@ -1247,12 +1247,19 @@ button.ask {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  /* Stretched into its grid track, because the form sets `justify-items: start` and
+     this row would otherwise be as wide as its buttons — putting "the right-hand end"
+     wherever they happen to finish instead of on the edge the fieldsets line up with.
+     It wraps because it now holds one thing more than it was sized for, and a
+     provider's error arrives verbatim and can be long. */
+  justify-self: stretch;
+  flex-wrap: wrap;
 }
-/* Bottom right, and quiet: it is here to be quoted in a bug report, not read while
-   anyone is filling the form in. */
+/* Far end of that row, and quiet: it is here to be quoted in a bug report, not read
+   while anyone is filling the form in. `margin-left: auto` rather than a spacer, so
+   the status message stays beside the buttons that produced it. */
 .settings .version {
-  margin: 1.4rem 0 0;
-  text-align: right;
+  margin-left: auto;
   font-size: 0.75rem;
   color: var(--dim);
 }

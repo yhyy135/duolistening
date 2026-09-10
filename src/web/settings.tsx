@@ -349,13 +349,12 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
             {checking ? t("settings.testing") : t("settings.test")}
           </button>
           {status && <span className="notice">{status}</span>}
+          {/* No `t` and no key in the eight tables: it is a number, and it reads the
+              same in every language. Declared rather than imported for the reason in
+              vite.config.ts. */}
+          <span className="version">v{__VERSION__}</span>
         </div>
       </form>
-
-      {/* No `t` and no key in the eight tables: it is a number, and it reads the same
-          in every language. Declared rather than imported for the reason in
-          vite.config.ts. */}
-      <p className="version">v{__VERSION__}</p>
     </main>
   );
 }
