@@ -893,6 +893,29 @@ main.player h1 {
 .tok {
   transition: opacity 0.12s;
 }
+/* Not decoration: an inline box with `opacity` below 1 loses its ruby annotation in
+   Safari, and a pending Token is exactly that. The furigana then appeared only where
+   the sweep had already been — a Token drops to opacity 1 on `now` and paints its
+   reading at that moment — so a reader watched the readings arrive one Token behind
+   the audio instead of standing over the whole Line. Measured against the same page
+   in both engines: Chrome draws all sixteen readings under `opacity: 0.55`, Safari 26
+   draws none, and an inline-block is the only thing that brings them back without
+   taking something else away. `isolation`, `will-change`, `translateZ` and dropping
+   the transition all leave them missing; fading the colour instead of the box does
+   paint them, but `color` on this element overrides the part-of-speech colour it is
+   meant to be dimming.
+
+   `:has(ruby)` rather than every Token, because an inline-block cannot be broken
+   across lines and a Token that needs no reading is where the long ones are: over
+   7369 Tokens of real transcript the longest with a reading was six characters and
+   the longest without was seventeen — an unsegmented run of kana, which has no
+   furigana to lose and every reason to keep wrapping on a narrow screen. A browser
+   without `:has()` skips the rule and is none the worse, since none of them has the
+   bug. `.word` is untouched for the same reason: it never holds a ruby, being the
+   rendering for the languages that have no Tokens. */
+.tok:has(ruby) {
+  display: inline-block;
+}
 .word.pending,
 .tok.pending {
   opacity: var(--pending);
