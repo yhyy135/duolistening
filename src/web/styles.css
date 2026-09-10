@@ -1248,6 +1248,14 @@ button.ask {
   align-items: center;
   gap: 0.6rem;
 }
+/* Bottom right, and quiet: it is here to be quoted in a bug report, not read while
+   anyone is filling the form in. */
+.settings .version {
+  margin: 1.4rem 0 0;
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--dim);
+}
 .slot-check {
   margin: 0;
   font-size: 0.85em;

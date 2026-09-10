@@ -20,6 +20,16 @@ npm run dev:web   # assets + vite on :5173
 
 There are no external binaries. ffmpeg and yt-dlp went with the server.
 
+**Every commit moves the version.** `package.json`'s `version` is the only place the
+number lives: `vite.config.ts` reads it into `__VERSION__` and the Settings screen
+prints it bottom right, which is where a bug report quotes it from. Semver, read off
+the change the commit makes — a fix is a patch, a feature is a minor, and a major is
+an incompatible change to something already in a reader's browser: the shape of a
+stored Resource or Transcript, the backup document, or the settings transfer string.
+Edit the field by hand and let it ride in the same commit as the work; `npm version`
+would make a commit and a tag of its own, and a number that lands separately stops
+answering which build someone is running.
+
 **Deploying** is two independent halves that know nothing about each other: `dist/web` on any static host, and `worker/` on Cloudflare. A reader points the page at a proxy from the Settings screen, so the page carries no configuration at all.
 
 **One deployment requirement**: whatever serves `dist/web` must not send `Content-Encoding: gzip` for `/kuromoji/dict/*`. Those files are gzip _content_ which kuromoji gunzips itself, not a transfer encoding — see the invariant below, which cost an hour.

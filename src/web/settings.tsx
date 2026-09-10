@@ -31,6 +31,9 @@ import { decodeSettings, encodeSettings } from "./settings-transfer.ts";
 import { readSettings, writeSettings } from "./store.ts";
 import { listModels } from "./text-model.ts";
 
+/** Replaced at build time by Vite's `define`, from package.json's version. */
+declare const __VERSION__: string;
+
 type SlotField = "textModel" | "transcriptionModel";
 
 interface ProviderPreset {
@@ -348,6 +351,11 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           {status && <span className="notice">{status}</span>}
         </div>
       </form>
+
+      {/* No `t` and no key in the eight tables: it is a number, and it reads the same
+          in every language. Declared rather than imported for the reason in
+          vite.config.ts. */}
+      <p className="version">v{__VERSION__}</p>
     </main>
   );
 }
