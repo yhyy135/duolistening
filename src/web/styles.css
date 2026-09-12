@@ -265,6 +265,21 @@ main {
   width: 100%;
   margin: 0 auto;
 }
+/* Nothing behind a modal moves while it is open. A <dialog> dims the page and makes
+   what is under it inert, and neither of those stops it scrolling — inertness is about
+   clicks and focus, and a scroll gesture still finds the nearest scroll box under the
+   finger. These two are every scroller this app has behind a dialog: `main` on the
+   shelf and in Settings, and the Lines on the player, where `main` itself does not
+   scroll. The second one is why `overscroll-behavior` in the dialog cannot be the whole
+   answer — the lyrics are the dialog's *sibling*, so the gesture reaches them directly
+   rather than by chaining out of anything. Stated here rather than as a class the
+   components toggle, because it is true of every dialog in the app and none of them
+   should have to remember it. Firefox below 121 has no `:has()` and keeps the old
+   behaviour, which is the bug and not a new one. */
+main:has(dialog[open]),
+main:has(dialog[open]) .lyrics {
+  overflow: hidden;
+}
 
 .notice,
 .error {
@@ -1035,6 +1050,10 @@ button.ask {
   color: var(--dim);
   margin: 0 0 1rem;
   overflow: auto;
+  /* The rule above locks the page's scroller, so there is nothing left for this to
+     chain to; this is what stops the gesture carrying on into the rubber-band that
+     iOS gives it instead. */
+  overscroll-behavior: contain;
 }
 .ask-dialog .answer :first-child {
   margin-top: 0;
@@ -1196,8 +1215,15 @@ button.ask {
 .episodes-dialog .actions {
   justify-content: center;
 }
+/* The wait before the list. Full width because the UA's own is about a third of the
+   dialog and reads as a stray control rather than as this dialog filling up. */
+.episodes-dialog progress {
+  width: 100%;
+  margin-bottom: 0.8rem;
+}
 .episodes-dialog .list {
   overflow: auto;
+  overscroll-behavior: contain;
   margin-bottom: 0.8rem;
   /* Room for a scrollbar. macOS draws an overlay one straight over the durations,
      which are the one column with nothing to its right to give way. */

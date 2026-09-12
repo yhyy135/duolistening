@@ -24,19 +24,28 @@ export interface PodcastFeedOptions {
 
 /** Browsing a podcast feed: one call, and the list a reader picks an episode from. */
 export interface PodcastFeed {
-  listEpisodes(feedUrl: string): Promise<{ feedTitle: string; episodes: Episode[] }>;
+  /**
+   * `signal` is how the picker's Cancel gets its money back: a feed is fetched whole
+   * before anything can be shown, several megabytes of it for a show with a long
+   * archive, and a reader who changed their mind should not go on paying a proxy for
+   * a list nobody is going to read.
+   */
+  listEpisodes(
+    feedUrl: string,
+    signal?: AbortSignal,
+  ): Promise<{ feedTitle: string; episodes: Episode[] }>;
 }
 
 export function createPodcastFeed(options: PodcastFeedOptions): PodcastFeed {
   const doFetch = options.fetch ?? globalThis.fetch;
 
   return {
-    async listEpisodes(feedUrl: string) {
+    async listEpisodes(feedUrl: string, signal?: AbortSignal) {
       let response: Response;
       try {
         // No `redirect` option: the proxy is what follows a feed host's redirect now,
         // and it answers this call with a plain 200 either way.
-        response = await doFetch(options.proxyUrl(feedUrl));
+        response = await doFetch(options.proxyUrl(feedUrl), { signal });
       } catch (cause) {
         // Named by the feed URL the reader typed, not the proxy URL wrapping it — that
         // one carries the proxy key in its query string, and this message is shown on

@@ -521,6 +521,8 @@ function ImportBox({
   /** Which titles the column actually cut, by `audioUrl`. Only those get a ⋯. */
   const [clipped, setClipped] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLDialogElement>(null);
+  /** The feed request in flight, so the dialog's Cancel can drop it. */
+  const fetching = useRef<AbortController | null>(null);
   const rowsRef = useRef<HTMLTableSectionElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -586,30 +588,61 @@ function ImportBox({
 
   async function listEpisodes(feedUrl: string) {
     if (!settings) return onError(t("library.needsSettings"));
+    // A second recommendation replaces the first rather than racing it: whichever
+    // answered last would otherwise be the list on screen.
+    fetching.current?.abort();
+    const attempt = new AbortController();
+    fetching.current = attempt;
     setBusy(true);
+    setFeed(null);
+    setFailure(null);
     onError("");
+    // Opened before the request and not after it. A feed is fetched whole before there
+    // is anything to show, which is seconds on a long archive, and a click on a
+    // recommendation used to leave the screen exactly as it was for all of them — no
+    // way to tell it had been heard, and nothing to press to take it back. The modal
+    // this already had is the mask: `showModal()` throws on a dialog that is already
+    // open, and picking a second recommendation is exactly how that would happen.
+    if (!dialogRef.current?.open) dialogRef.current?.showModal();
     try {
       const podcast = createPodcastFeed({
         proxyUrl: (target) => proxyUrl(settings.proxy, target),
       });
-      setFeed(await podcast.listEpisodes(feedUrl));
+      const listing = await podcast.listEpisodes(feedUrl, attempt.signal);
+      // A reply that arrives after its attempt was cancelled or replaced is not the
+      // list anybody is waiting for — an abort cannot reach one already on its way back.
+      if (fetching.current !== attempt) return;
+      setFeed(listing);
       setListed(feedUrl);
-      setFailure(null);
       setShown(PAGE);
       setExpanded(null);
       setClipped({});
     } catch (problem) {
+      // A cancelled request is not a failure and has no dialog left to be shown in —
+      // closing it is what aborted this.
+      if (attempt.signal.aborted) return;
       // Into the dialog rather than up onto the shelf, where the message sat above the
       // recommendations with nothing around it saying what had been asked for. Whether
       // the list arrived or not, the answer to "list this feed" lands in one place.
       setFeed(null);
       setFailure(reason(problem));
     } finally {
-      setBusy(false);
-      // `showModal()` throws on a dialog that is already open, and picking a second
-      // recommendation is exactly how that would happen.
-      if (!dialogRef.current?.open) dialogRef.current?.showModal();
+      // Only for the attempt still on screen. The one this replaced settles a moment
+      // later, and clearing the flag there would take the new request's own wait down.
+      if (fetching.current === attempt) setBusy(false);
     }
+  }
+
+  /**
+   * Out of the picker, whichever way: the button below, Esc, or a pick. It drops the
+   * request first, because a feed nobody is waiting for is still being paid for — the
+   * bytes go through the reader's own proxy.
+   */
+  function dismiss() {
+    fetching.current?.abort();
+    fetching.current = null;
+    setBusy(false);
+    dialogRef.current?.close();
   }
 
   function pick(episode: Episode) {
@@ -636,7 +669,7 @@ function ImportBox({
         report,
       ),
     );
-    dialogRef.current?.close();
+    dismiss();
     setFeed(null);
     // Only if the box is what opened this list. A recommendation never filled it, and
     // emptying it would throw away a link somebody had typed and not imported yet.
@@ -677,7 +710,22 @@ function ImportBox({
       {/* One dialog for both answers a feed can give. A modal rather than a block that
           pushes the shelf down: a feed's episodes are a decision to make now, and the
           list used to appear above a screen the reader was already scrolled past. */}
-      <dialog ref={dialogRef} className="ask-dialog episodes-dialog">
+      {/* `onClose` for Esc, and the button below calls the same function rather than
+          leaving it to the event this raises: a hidden page never delivers a dialog's
+          `close`, so that route cannot be measured, and the one a finger takes should
+          not be the unmeasurable one. `close()` on a closed dialog raises nothing, so
+          arriving both ways costs one no-op. */}
+      <dialog ref={dialogRef} className="ask-dialog episodes-dialog" onClose={dismiss}>
+        {/* The wait, in the dialog the list will appear in — not an overlay of its own,
+            which would be a second mask over the one a modal already draws. An
+            indeterminate <progress> because there is no fraction to report: a feed
+            arrives whole or not at all. */}
+        {busy && (
+          <>
+            <p className="text">{t("library.working")}</p>
+            <progress />
+          </>
+        )}
         {feed && (
           <>
             <p className="text">{feed.feedTitle}</p>
@@ -742,8 +790,10 @@ function ImportBox({
         )}
         {failure && <p className="text">{t("library.feedFailed", { reason: failure })}</p>}
         <div className="actions">
-          <button type="button" className="ghost" onClick={() => dialogRef.current?.close()}>
-            {t("common.close")}
+          {/* One button, and while the feed is in flight it is the way to call it off.
+              Closing is what aborts, so the two are the same button and cannot drift. */}
+          <button type="button" className="ghost" onClick={dismiss}>
+            {busy ? t("common.cancel") : t("common.close")}
           </button>
         </div>
       </dialog>
