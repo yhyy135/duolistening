@@ -1,6 +1,6 @@
 {
-  "name": "duolistening",
-  "short_name": "duolistening",
+  "name": "Duolistening",
+  "short_name": "Duolistening",
   "description": "Import a podcast episode, transcribe it with your own keys, and study it as a lyrics-style transcript.",
   "start_url": "./#/",
   "scope": "./",

@@ -194,6 +194,15 @@ header {
 header .brand {
   font-weight: 600;
   margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+/* Sized against the name beside it rather than in pixels, so the two stay a pair at
+   any text size. The PNG rounds its own corners, so nothing here has to. */
+header .brand img {
+  width: 1.3em;
+  height: 1.3em;
 }
 header a:not(.brand) {
   color: var(--dim);

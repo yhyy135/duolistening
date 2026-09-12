@@ -113,11 +113,32 @@ function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
   };
 
   const resourceId = hash.startsWith("#/r/") ? decodeURIComponent(hash.slice(4)) : null;
+  /** Which screen the hash resolves to, decided once — the switch below reads it too. */
+  const onShelf = !resourceId && hash !== "#/settings";
   return (
     <>
       <header>
-        <a href="#/" className="brand">
-          duolistening
+        <a
+          href="#/"
+          className="brand"
+          onClick={(event) => {
+            // On the shelf this href points where the reader already is, so the click
+            // does nothing at all — no hash change, no re-render. A reload is what it
+            // means there, and the shelf is the one screen where one costs nothing:
+            // there is no playback to lose and no form half filled in. Off the shelf
+            // it stays a link home.
+            if (!onShelf) return;
+            event.preventDefault();
+            location.reload();
+          }}
+        >
+          {/* The file the favicon already points at, rather than a second drawing of
+              the same mark in SVG — two of them drift. The path is relative for the
+              reason the manifest's are: hash routing never changes the document's
+              path, so it resolves at the app root wherever the bundle is unpacked.
+              Decorative, because the name is written beside it. */}
+          <img src="icon-192.png" alt="" width={20} height={20} />
+          Duolistening
         </a>
         <a href="#/settings" aria-label={t("nav.settings")} title={t("nav.settings")}>
           <Icon name="gear" />
@@ -138,10 +159,10 @@ function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
       </header>
       {resourceId ? (
         <PlayerScreen id={resourceId} />
-      ) : hash === "#/settings" ? (
-        <SettingsScreen onLocale={onLocale} />
-      ) : (
+      ) : onShelf ? (
         <LibraryScreen />
+      ) : (
+        <SettingsScreen onLocale={onLocale} />
       )}
     </>
   );
