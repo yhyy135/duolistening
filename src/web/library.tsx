@@ -189,7 +189,18 @@ export function LibraryScreen() {
                 <span
                   className="confirm"
                   onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget)) setConfirming(null);
+                    // A null `relatedTarget` is focus going nowhere, and that is what a
+                    // plain click on a button reports in WebKit — it blurs whatever had
+                    // focus and focuses nothing. Treating it as focus leaving unmounted
+                    // Confirm between mousedown and mouseup, so the click never reached
+                    // it and the episode stayed on the shelf. Only a move to another
+                    // element disarms; an armed pair otherwise waits for Cancel, Confirm,
+                    // or the next Delete.
+                    if (
+                      event.relatedTarget &&
+                      !event.currentTarget.contains(event.relatedTarget)
+                    )
+                      setConfirming(null);
                   }}
                 >
                   <button className="ghost danger" onClick={() => void remove(resource)}>
