@@ -34,6 +34,7 @@ import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
 import { Cover, LineBadge } from "./cover.tsx";
 import { Icon } from "./icons.tsx";
 import { isImporting, retryImport, type ImportProgress } from "./import.ts";
+import { htmlBreaks } from "./markdown.ts";
 import { buildAnnotator, buildImportDeps, japaneseTokenizer } from "./pipeline.ts";
 import { proxyUrl } from "./proxy.ts";
 import {
@@ -1432,7 +1433,7 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
       <p className="quote">{text}</p>
       <div className="answer">
         {answer ? (
-          <Markdown remarkPlugins={[remarkGfm]}>{answer}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm, htmlBreaks]}>{answer}</Markdown>
         ) : (
           t("player.asking")
         )}
