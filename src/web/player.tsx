@@ -1373,18 +1373,12 @@ function LineText({
   return <>{line.text}</>;
 }
 
-/**
- * Furigana is native HTML; a reading is only present when the surface has kanji. The
- * reading has a span of its own so that the stylesheet can let it overhang its Token —
- * see `rt .reading`.
- */
+/** Furigana is native HTML; a reading is only present when the surface has kanji. */
 function TokenText({ token, sweep }: { token: Token; sweep: string }) {
   const body = token.reading ? (
     <ruby>
       {token.surface}
-      <rt>
-        <span className="reading">{token.reading}</span>
-      </rt>
+      <rt>{token.reading}</rt>
     </ruby>
   ) : (
     token.surface

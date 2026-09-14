@@ -343,7 +343,7 @@ Rules use the alias names `--ground`, `--raised`, `--field`, `--thumb`, `--hairl
 - **Micro** (600, 0.6875rem): key caps and the language-learning badge. In Station, also the badge's language, the labelled transport captions and the LED strip on phones.
 - **Brand** (700, 1.0625rem): the app's name in the top bar, and the first-run heading.
 - **Monogram** (700, -0.02em): 1.05rem on shelf covers, 1.25rem in the episode picker, 1.5rem on the resume card, 1.75rem on Suggestions and 3.25rem in Standard's side column.
-- **Furigana** (500, 0.5em, dim): `rt` over a Token, centred and free to overhang it, so a long reading never spreads the text beneath it. Every Line of a Japanese Transcript carries its readings; only the current Line shows them.
+- **Furigana** (500, 0.5em, dim): `rt` over a Token at its natural width, so a reading wider than its Token spaces the text beneath it rather than running into its neighbour's. Every Line of a Japanese Transcript carries its readings; only the current Line shows them.
 
 ### Named Rules
 

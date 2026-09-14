@@ -1129,12 +1129,13 @@ main.library {
   gap: 0.625rem;
   margin-top: 0.875rem;
 }
+/* A sheet whose only way out is one button puts it in the middle. */
+:is(.picker-sheet, .ask-sheet) .actions {
+  justify-content: center;
+}
 
 /* ---- the episode picker ---- */
 
-.picker-sheet .actions {
-  justify-content: center;
-}
 .picker-sheet progress {
   width: 100%;
 }
@@ -1788,22 +1789,14 @@ main.player-stub {
   border-radius: 3px;
 }
 
+/* As wide as the reading needs, so a long one spaces its Token's text apart — in every Line,
+   since every Line carries its readings. A zero-width reading kept the text together and
+   ran neighbouring readings into each other instead, over 仮釈放中 for one. */
 rt {
   font-size: 0.5em;
   font-weight: 500;
   color: var(--dim);
   user-select: none;
-}
-/* A reading is centred over its Token and allowed to overhang it, the way furigana is set
-   on paper. Left to itself a ruby is as wide as the wider of its text and its reading, so
-   ひゃくしょう spread 百姓 apart — and with every Line carrying its readings, shown or not,
-   the gaps stood in Lines that showed no reading to explain them. A zero-width box takes
-   the reading out of that measurement, and centring overflows it evenly both ways. */
-rt .reading {
-  display: inline-flex;
-  justify-content: center;
-  width: 0;
-  white-space: nowrap;
 }
 
 .pos-noun {
