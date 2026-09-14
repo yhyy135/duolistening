@@ -57,14 +57,15 @@ test("fills in a translation for every line", async () => {
   );
 });
 
-test("splits long transcripts into batches", async () => {
+test("sends the Lines it is handed as one request, however many there are", async () => {
+  // A window is one request (ADR 0011). Cutting it into batches sent side by side put
+  // two and three requests in flight at once, against providers that count them.
   const textModel = stubTextModel(translateEverything);
-  const annotator = createAnnotator({ textModel, batchSize: 10 });
+  const count = 3 * BLOCK_LINES;
+  const result = await createAnnotator({ textModel }).annotate(lines(count), japanese);
 
-  const result = await annotator.annotate(lines(25), japanese);
-
-  assert.equal(textModel.prompts.length, 3);
-  assert.equal(result.at(-1)?.translation, "translated:台詞24");
+  assert.equal(textModel.prompts.length, 1);
+  assert.equal(result.at(-1)?.translation, `translated:台詞${count - 1}`);
 });
 
 test("matches replies by index, so a reordered reply still lands correctly", async () => {
@@ -153,21 +154,33 @@ const partly = (count: number, translated: number): Transcript =>
 
 const none = new Set<number>();
 
-test("the window starts where the listener is, and reaches one block ahead", () => {
+test("one window reaches a block behind the listener and a block ahead, in one request", () => {
   const window = nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, none);
 
-  // Blocks 3 and 4: what is on screen, and what is about to be. Not block 2 — that
-  // one is behind, and comes on the next pass.
-  assert.deepEqual(window, { from: 120, to: 200, blocks: [3, 4] });
+  // Blocks 2, 3 and 4: what was just said, what is on screen, and what is about to be —
+  // one span, so one request, where it used to be two in flight and a third behind them.
+  assert.deepEqual(window, { from: 2 * BLOCK_LINES, to: 5 * BLOCK_LINES, blocks: [2, 3, 4] });
 });
 
-test("the block behind is picked up once the two ahead are covered", () => {
-  const asked = new Set([3, 4]);
-  const window = nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, asked);
-  assert.deepEqual(window, { from: 80, to: 120, blocks: [2] });
-
-  asked.add(2);
+test("listening on through a window asks for one new block at each crossing", () => {
+  const asked = new Set([2, 3, 4]);
   assert.equal(nextWindow(partly(400, 0), 3 * BLOCK_LINES + 5, asked), null);
+
+  // Into block 4, which brings block 5 into the window — and only block 5 goes out.
+  assert.deepEqual(nextWindow(partly(400, 0), 4 * BLOCK_LINES, asked), {
+    from: 5 * BLOCK_LINES,
+    to: 6 * BLOCK_LINES,
+    blocks: [5],
+  });
+});
+
+test("a translated block between two missing ones splits the window, and ahead goes first", () => {
+  // Never one request spanning all three: that would pay again for the block in the middle.
+  const patchy = lines(400).map((line, index) =>
+    index >= 3 * BLOCK_LINES && index < 4 * BLOCK_LINES ? { ...line, translation: "译" } : line,
+  );
+  assert.deepEqual(nextWindow(patchy, 3 * BLOCK_LINES + 5, none)?.blocks, [4]);
+  assert.deepEqual(nextWindow(patchy, 3 * BLOCK_LINES + 5, new Set([4]))?.blocks, [2]);
 });
 
 test("a block already translated is never asked for again", () => {
@@ -198,14 +211,14 @@ test("a short Transcript is one window, and an empty one is no work at all", () 
 });
 
 test("a listener past the last Line is not sent looking off the end", () => {
-  const window = nextWindow(partly(45, 0), 999, none);
-  assert.deepEqual(window, { from: 40, to: 45, blocks: [1] });
+  const window = nextWindow(partly(2 * BLOCK_LINES + 5, 0), 999, none);
+  assert.deepEqual(window, { from: BLOCK_LINES, to: 2 * BLOCK_LINES + 5, blocks: [1, 2] });
 });
 
 test("a Line the model skipped does not put its block back in the queue", () => {
   // Asked, answered, and one entry missing from the reply. Retrying on every render
   // would be an infinite request loop against a model that will skip it again.
-  const gappy = partly(40, 40).map((line, index) =>
+  const gappy = partly(BLOCK_LINES, BLOCK_LINES).map((line, index) =>
     index === 7 ? { ...line, translation: undefined } : line,
   );
   assert.equal(nextWindow(gappy, 0, new Set([0])), null);

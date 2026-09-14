@@ -2,7 +2,6 @@ import {
   JAPANESE,
   LANGUAGE_NAMES,
   type LanguageCode,
-  type Line,
   type Transcript,
 } from "../shared/model.ts";
 
@@ -35,10 +34,6 @@ export interface TranslationModel {
 
 export interface AnnotatorOptions {
   textModel: TranslationModel;
-  /** Lines per translation call. Default 40. */
-  batchSize?: number;
-  /** Batches in flight at once. Default 4 — enough to matter, low enough to stay under most providers' rate limits. */
-  concurrency?: number;
 }
 
 export interface AnnotateOptions {
@@ -55,59 +50,38 @@ interface TranslatedLine {
 }
 
 /**
- * Translation, in batches rather than one call per Line — an episode is several
- * hundred Lines, and one call each would be slow and expensive. Batches are matched
- * back by index, not by position, because a model that drops or reorders an entry must
- * not shift every later translation onto the wrong Line.
+ * Translation of the Lines it is handed, in one request. Replies are matched back by
+ * index, not by position, because a model that drops or reorders an entry must not shift
+ * every later translation onto the wrong Line.
+ *
+ * One request, never several side by side. The player hands over one window at a time,
+ * sized to come back in a single reply (see `BLOCK_LINES`). This used to cut a window
+ * into batches of forty and send four of them at once, which put two and three requests
+ * in flight for one window — and a provider's rate limit counts requests, not windows.
  */
-export function createAnnotator(options: AnnotatorOptions) {
-  const { textModel } = options;
-  const batchSize = options.batchSize ?? 40;
-  const concurrency = options.concurrency ?? 4;
-
+export function createAnnotator({ textModel }: AnnotatorOptions) {
   return {
     async annotate(lines: Transcript, opts: AnnotateOptions): Promise<Transcript> {
       if (lines.length === 0) return [];
 
+      const reply = await textModel.completeJson<TranslatedLine[]>(
+        translationPrompt(lines, opts.targetLanguage, opts.nativeLanguage),
+      );
       const translations = new Map<number, string>();
-      const merge = (): Transcript =>
-        lines.map((line, index) => {
-          const translation = translations.get(index);
-          // A model that skipped an entry leaves that Line untranslated rather than
-          // wearing its neighbour's translation.
-          return translation === undefined ? line : { ...line, translation };
-        });
-
-      const batches = chunk(lines, batchSize);
-
-      // Batches translate independently, so they go out concurrently (capped, to stay
-      // under a provider's rate limit) instead of one-at-a-time — sequential awaiting
-      // made total time scale with batch count, which for a full episode is the slow path.
-      async function runBatch(batch: (typeof batches)[number]): Promise<void> {
-        const reply = await textModel.completeJson<TranslatedLine[]>(
-          translationPrompt(batch, opts.targetLanguage, opts.nativeLanguage),
-        );
-        for (const entry of Array.isArray(reply) ? reply : []) {
-          if (typeof entry?.i === "number" && typeof entry?.t === "string") {
-            translations.set(entry.i, entry.t);
-          }
+      for (const entry of Array.isArray(reply) ? reply : []) {
+        if (typeof entry?.i === "number" && typeof entry?.t === "string") {
+          translations.set(entry.i, entry.t);
         }
       }
 
-      const queue = [...batches];
-      const workers = Array.from(
-        { length: Math.min(concurrency, batches.length) },
-        async () => {
-          for (let next = queue.shift(); next; next = queue.shift()) {
-            await runBatch(next);
-          }
-        },
-      );
-      await Promise.all(workers);
-
       // New Lines throughout: callers hold onto the input, and silently mutating it
       // would make a retry of this step operate on already-annotated data.
-      return merge();
+      return lines.map((line, index) => {
+        const translation = translations.get(index);
+        // A model that skipped an entry leaves that Line untranslated rather than
+        // wearing its neighbour's translation.
+        return translation === undefined ? line : { ...line, translation };
+      });
     },
   };
 }
@@ -133,11 +107,13 @@ export function wantsJapanese(lines: Transcript, targetLanguage?: LanguageCode):
 }
 
 /**
- * Lines per translation request. Also the default batch size, so the common case —
- * two neighbouring blocks that have never been translated — is two batches in flight
- * and one round trip.
+ * Lines per block of the grid `nextWindow` works on. A window is at most three blocks —
+ * the one being listened to and one either side — and goes out as a single request, so
+ * this is sized for sixty Lines to come back in one reply: two or three thousand tokens
+ * of translation, inside the 4,096-token reply some providers stop at unless told
+ * otherwise. Forty to a block would make that window a hundred and twenty Lines.
  */
-export const BLOCK_LINES = 40;
+export const BLOCK_LINES = 20;
 
 /** A slice of a Transcript to translate, and the blocks it covers. */
 export interface TranslationWindow {
@@ -155,8 +131,12 @@ export interface TranslationWindow {
  * The Transcript is cut into fixed blocks so that "have we asked for this yet" is one
  * number rather than a set of ranges to merge: seeking back and forth over the same
  * minute must not produce a new, slightly different request each time. Three blocks
- * are kept translated — the one being listened to, one ahead and one behind — and the
- * one being listened to goes first, because that is the one on screen.
+ * are kept translated — the one being listened to, one ahead and one behind — and all
+ * of them that are still missing go out as one span. Opening an episode is therefore one
+ * request, and listening on is one more each time a new block comes into range.
+ *
+ * The span is contiguous and never pays twice: a block already translated between two
+ * missing ones splits them, and the one ahead goes first.
  *
  * `asked` is the caller's memory of what it has already sent, which is not the same
  * question as what came back: a request that failed, or a model that skipped a Line,
@@ -172,26 +152,22 @@ export function nextWindow(
   if (blocks === 0) return null;
   // Before the first Line is a real position: it is what the screen shows before
   // playback has started, and the reader is looking at the top of the Transcript.
-  const here = Math.min(
-    Math.max(0, Math.floor(Math.max(0, lineIndex) / blockSize)),
-    blocks - 1,
-  );
+  const here = Math.min(Math.floor(Math.max(0, lineIndex) / blockSize), blocks - 1);
 
   const missing = (block: number) =>
+    block >= Math.max(0, here - 1) &&
+    block <= Math.min(blocks - 1, here + 1) &&
     !asked.has(block) &&
     lines
       .slice(block * blockSize, (block + 1) * blockSize)
       .some((line) => line.translation === undefined);
 
-  const first = [here, here + 1, here - 1].find(
-    (block) => block >= 0 && block < blocks && missing(block),
-  );
-  if (first === undefined) return null;
-
-  // Extended while the next block is missing too and still inside the window, so a
-  // Transcript with nothing translated goes out as one request rather than three.
-  let last = first;
-  while (last + 1 <= here + 1 && missing(last + 1)) last++;
+  const start = [here, here + 1, here - 1].find(missing);
+  if (start === undefined) return null;
+  let first = start;
+  let last = start;
+  while (missing(first - 1)) first--;
+  while (missing(last + 1)) last++;
 
   return {
     from: first * blockSize,
@@ -201,7 +177,7 @@ export function nextWindow(
 }
 
 function translationPrompt(
-  batch: { line: Line; index: number }[],
+  lines: Transcript,
   targetLanguage: string | undefined,
   nativeLanguage: string,
 ): string {
@@ -220,16 +196,6 @@ function translationPrompt(
     `Reply with only a JSON array: [{"i": <the line's number>, "t": "<the translation>"}],`,
     "one entry for every line you were given.",
     "",
-    ...batch.map(({ line, index }) => `${index}: ${line.text}`),
+    ...lines.map((line, index) => `${index}: ${line.text}`),
   ].join("\n");
-}
-
-function chunk(lines: Transcript, size: number): { line: Line; index: number }[][] {
-  const batches: { line: Line; index: number }[][] = [];
-  for (let start = 0; start < lines.length; start += size) {
-    batches.push(
-      lines.slice(start, start + size).map((line, offset) => ({ line, index: start + offset })),
-    );
-  }
-  return batches;
 }

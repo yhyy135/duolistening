@@ -64,13 +64,21 @@ test("posts the prompt to the OpenAI-compatible chat endpoint", async () => {
   });
 });
 
-test("retries a rate limit, then a server error, and succeeds", async () => {
-  const fetch = stubFetch(fails(429), says("finally"));
-  assert.equal(await model(fetch).complete("hi"), "finally");
-  assert.equal(fetch.calls.length, 2);
-
+test("retries a server error, and succeeds", async () => {
   const flaky = stubFetch(fails(503), says("finally"));
   assert.equal(await model(flaky).complete("hi"), "finally");
+  assert.equal(flaky.calls.length, 2);
+});
+
+test("does not retry a rate limit — asking again a moment later is refused the same way", async () => {
+  // Three attempts inside a second and a half made one refused translation window three
+  // requests against the very limit that had just refused it.
+  const fetch = stubFetch(fails(429), says("too soon"));
+  await assert.rejects(model(fetch).complete("hi"), (error: ModelError) => {
+    assert.equal(error.reason, "rate_limit");
+    return true;
+  });
+  assert.equal(fetch.calls.length, 1);
 });
 
 test("retries a network failure", async () => {

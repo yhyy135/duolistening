@@ -36,7 +36,13 @@ export class ModelError extends Error {
   }
 }
 
-const RETRYABLE = new Set<ModelErrorReason>(["rate_limit", "server", "network"]);
+/**
+ * A rate limit is deliberately not one of them. The retries come half a second and a
+ * second later, and a limit counted per minute refuses those the same way: each attempt
+ * spends more of an allowance that has just run out, and one translation window went out
+ * three times on its way to failing.
+ */
+const RETRYABLE = new Set<ModelErrorReason>(["server", "network"]);
 
 interface Message {
   role: "user" | "assistant";

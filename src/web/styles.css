@@ -1691,19 +1691,19 @@ main.player-stub {
 .lyrics .words {
   display: block;
 }
-/* The same size in every state. A Line that grew when it lit reflowed everything
-   under it, and the page the follow-scroll was centring moved while it centred it.
-   The lift is a transform, which the layout never sees. */
+/* The same size and the same place in every state: lighting a Line changes its colour
+   and nothing else. A Line that grew when it lit reflowed everything under it, and the
+   page the follow-scroll was centring moved while it centred it. The lift that took the
+   growth's place was a transform, which kept the layout still and moved the words
+   instead — 3% of a long Line is nine pixels sideways at its far end on a phone, sliding
+   while it is being read. */
 .lyrics .text {
   display: block;
   font-size: 1.3125rem;
   font-weight: 700;
   line-height: 1.5;
   letter-spacing: -0.005em;
-  transform-origin: left center;
-  transition:
-    transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 0.2s;
+  transition: filter 0.2s;
 }
 .lyrics .translation {
   display: block;
@@ -1716,8 +1716,17 @@ main.player-stub {
 .lyrics li.current .seek {
   color: var(--ink);
 }
-.lyrics li.current .text {
-  transform: scale(1.03);
+/* Readings and part-of-speech colours belong to the Line being spoken (ADR 0005), but
+   every Line of a Japanese Transcript carries its Tokens (player.tsx), so the readings
+   hold their room above the text whether they are shown or not. Drawn on the current
+   Line alone, they made it grow as it lit and shrink as it passed — on ごん狐 at 375px,
+   57 of 65 Lines stood 6 to 30px taller while current, and one wrapped onto an extra
+   line — and every Line below moved down and back up again, once a Line. */
+.lyrics li:not(.current) rt {
+  visibility: hidden;
+}
+.lyrics li:not(.current) .tok {
+  color: inherit;
 }
 /* On repeat: the Line being held is tinted, beside the pressed repeat button. */
 .lyrics li.looping .seek,
@@ -1784,6 +1793,17 @@ rt {
   font-weight: 500;
   color: var(--dim);
   user-select: none;
+}
+/* A reading is centred over its Token and allowed to overhang it, the way furigana is set
+   on paper. Left to itself a ruby is as wide as the wider of its text and its reading, so
+   ひゃくしょう spread 百姓 apart — and with every Line carrying its readings, shown or not,
+   the gaps stood in Lines that showed no reading to explain them. A zero-width box takes
+   the reading out of that measurement, and centring overflows it evenly both ways. */
+rt .reading {
+  display: inline-flex;
+  justify-content: center;
+  width: 0;
+  white-space: nowrap;
 }
 
 .pos-noun {
@@ -2703,9 +2723,6 @@ main.settings {
   & .lyrics li.current .seek,
   & .lyrics li.current .stamp {
     color: var(--ink);
-  }
-  & .lyrics li.current .text {
-    transform: none;
   }
   & .lyrics li.looping .seek,
   & .lyrics li.looping .seek:hover:not(:disabled) {

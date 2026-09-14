@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-14T10:57:39.813Z",
+  "generatedAt": "2026-09-14T15:35:39.762Z",
   "title": "Design System: Duolistening",
   "extensions": {
     "looks": {
@@ -876,7 +876,7 @@
       },
       "std-line": {
         "displayName": "Line (Standard)",
-        "purpose": "Lyric text on phones; current Line lifts by scale(1.03)."
+        "purpose": "Lyric text on phones; the current Line lights by colour, never by size or place."
       },
       "sta-line": {
         "displayName": "Line (Station)",
@@ -967,7 +967,7 @@
       {
         "name": "ease-lift",
         "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
-        "purpose": "Line lift, cover hover, sheet rise."
+        "purpose": "Cover hover, sheet rise."
       },
       {
         "name": "state",
@@ -978,11 +978,6 @@
         "name": "line-color",
         "value": "0.3s",
         "purpose": "A Line changing ink as it becomes current."
-      },
-      {
-        "name": "line-lift",
-        "value": "0.35s",
-        "purpose": "Standard's current Line scale."
       },
       {
         "name": "sheet-up",
@@ -1087,7 +1082,7 @@
       "refersTo": "std-line",
       "description": "Faint Lines; current in ink with the spoken Word in the accent.",
       "html": "<ol class=\"ds-lyrics\"><li><span class=\"ds-text\">そして夜でも昼でも</span><span class=\"ds-tr\">无论是夜晚还是白天</span></li><li class=\"ds-current\"><span class=\"ds-text\"><span>畑へ</span><span class=\"ds-now\">入って</span><span class=\"ds-pending\">芋を掘り散らし</span></span><span class=\"ds-tr\">跑到田里把番薯挖得到处都是</span></li></ol>",
-      "css": ".ds-lyrics{list-style:none;margin:0;padding:0;font-family:system-ui,sans-serif}.ds-lyrics li{padding:.625rem .75rem;border-radius:16px;color:var(--faint,#6a707c);transition:color .3s}.ds-lyrics li:hover{background:color-mix(in srgb,var(--ink,#111318) 4%,transparent)}.ds-text{display:block;font:700 1.3125rem/1.5 inherit;letter-spacing:-.005em;transform-origin:left center;transition:transform .35s cubic-bezier(.2,.8,.2,1)}.ds-tr{display:block;margin-top:.2rem;font-size:.9375rem}.ds-current{color:var(--ink,#111318)}.ds-current .ds-text{transform:scale(1.03)}.ds-now{color:var(--accent,#2459d6)}.ds-pending{opacity:var(--pending,.55)}"
+      "css": ".ds-lyrics{list-style:none;margin:0;padding:0;font-family:system-ui,sans-serif}.ds-lyrics li{padding:.625rem .75rem;border-radius:16px;color:var(--faint,#6a707c);transition:color .3s}.ds-lyrics li:hover{background:color-mix(in srgb,var(--ink,#111318) 4%,transparent)}.ds-text{display:block;font:700 1.3125rem/1.5 inherit;letter-spacing:-.005em}.ds-tr{display:block;margin-top:.2rem;font-size:.9375rem}.ds-current{color:var(--ink,#111318)}.ds-now{color:var(--accent,#2459d6)}.ds-pending{opacity:var(--pending,.55)}"
     },
     {
       "name": "Play Button",

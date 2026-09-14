@@ -343,7 +343,7 @@ Rules use the alias names `--ground`, `--raised`, `--field`, `--thumb`, `--hairl
 - **Micro** (600, 0.6875rem): key caps and the language-learning badge. In Station, also the badge's language, the labelled transport captions and the LED strip on phones.
 - **Brand** (700, 1.0625rem): the app's name in the top bar, and the first-run heading.
 - **Monogram** (700, -0.02em): 1.05rem on shelf covers, 1.25rem in the episode picker, 1.5rem on the resume card, 1.75rem on Suggestions and 3.25rem in Standard's side column.
-- **Furigana** (500, 0.5em, dim): `rt` over a Token.
+- **Furigana** (500, 0.5em, dim): `rt` over a Token, centred and free to overhang it, so a long reading never spreads the text beneath it. Every Line of a Japanese Transcript carries its readings; only the current Line shows them.
 
 ### Named Rules
 
@@ -431,9 +431,9 @@ A 2.625rem square sign with a 3px route-green frame and 8px corners. The show's 
 
 ### The Lines
 
-Each Line is a real `<button>` inside a list item. A Line not being spoken is faint, the current Line is ink, and an ask-AI icon button sits at its right edge. That button appears on hover or when the Line is current on desktop, and is always visible on touch.
+Each Line is a real `<button>` inside a list item. A Line not being spoken is faint, the current Line is ink, and an ask-AI icon button sits at its right edge. That button appears on hover or when the Line is current on desktop, and is always visible on touch. Lighting a Line never changes its size or its place, in either look. Every Line of a Japanese Transcript carries its furigana, hidden except on the current Line, so a reading holds its room and never makes a Line grow as it lights.
 
-- **Standard:** the current Line scales to 1.03 with a transform, so layout never changes. The Word being spoken turns accent. A pending Word or Token is at `--pending` opacity. The Token being spoken gets an accent-soft background with a 2px soft ring and keeps its part-of-speech colour. A Token with furigana is an inline-block, which Safari needs to draw the reading.
+- **Standard:** the current Line lights by colour alone. The Word being spoken turns accent. A pending Word or Token is at `--pending` opacity. The Token being spoken gets an accent-soft background with a 2px soft ring and keeps its part-of-speech colour. A Token with furigana is an inline-block, which Safari needs to draw the reading.
 - **Station:** a Line lights by changing colour, never size. The next Line is dim and the current Line and its stamp are ink. The route runs 4px behind the stop column: accent over passed Lines, hairline ahead, and split at the current stop. Stops ahead are hollow 0.875rem rings, passed stops are filled 0.75rem dots, and the current stop is a 1.625rem ring with a 6px accent border. A Line on repeat fills its stop instead of tinting its row.
 
 ### Transport and dock

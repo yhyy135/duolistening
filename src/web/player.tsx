@@ -7,7 +7,16 @@
 // each Line's start time, the stops either side of the current one, a tick per Line
 // along the band — and the stylesheet alone decides which of it is shown.
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { StringKey } from "../shared/i18n.ts";
@@ -92,6 +101,22 @@ const MODE_LABELS: Record<SubtitleMode, StringKey> = {
  * 828-Line episode would draw a grey bar the hard way.
  */
 const MAX_TICKS = 150;
+
+/**
+ * How long playback has to rest in a block before the window around it goes out. The
+ * translation effect re-runs whenever the block changes, and a drag along the progress
+ * bar changes it every few pixels: without the wait, the first block a drag crossed was
+ * translated for nobody.
+ */
+const SETTLE_MS = 1000;
+
+/**
+ * The translation window in flight for each episode — for the page, not for one visit to
+ * this screen. An answer outlives the screen that asked for it, since it is written to
+ * the store wherever the reader has gone, and pressing Back and opening the episode
+ * again while one was out used to send the same window a second time beside the first.
+ */
+const windowsInFlight = new Map<Resource["id"], Promise<void>>();
 
 /** Native list-scrolling keys. Arrow-left/right are deliberately not here: those are
     the app's own line shortcuts below, and a jump they cause should still be followed. */
@@ -547,61 +572,101 @@ export function PlayerScreen({ id }: { id: string }) {
 
   /**
    * Translation happens while listening rather than during the import (ADR 0011): the
-   * window around the Line being played goes out, one request at a time, and appears
-   * in the lyrics as it lands. Someone resuming at twenty minutes waits for the Lines
-   * at twenty minutes, not for the nineteen minutes before them — and an episode
-   * nobody finishes is only paid for as far as it was listened to.
+   * window around the Line being played goes out as one request, and appears in the
+   * lyrics as it lands. Someone resuming at twenty minutes waits for the Lines at
+   * twenty minutes, not for the nineteen minutes before them — and an episode nobody
+   * finishes is only paid for as far as it was listened to.
    *
-   * The loop is the effect re-running rather than a `while`: each window ends by
-   * bumping `pass`, and `busy` is what keeps two of them from overlapping. Where
-   * playback is comes from the `seconds` ref, so a seek mid-request retargets the
+   * Two things send a window and nothing else does: the screen opening, and playback
+   * coming to rest in a block the last window did not reach. At rest, because this
+   * re-runs whenever the block changes and a drag along the progress bar changes it
+   * every few pixels (`SETTLE_MS`). One at a time, because `busy` keeps two from
+   * overlapping and a window still out from an earlier visit to this screen is waited
+   * for rather than sent again (`windowsInFlight`). And a window that failed does not
+   * send the next one: a rate limit is the provider asking for fewer requests, so the
+   * next waits for the next block.
+   *
+   * Where playback is comes from the `seconds` ref, so a seek mid-request retargets the
    * next window without cancelling the one in flight.
    */
   useEffect(() => {
-    const resource = data?.resource;
-    const lines = data?.transcript;
-    if (!annotator || !resource || !lines?.length || busy.current) return;
+    if (!annotator || !data?.transcript.length) return;
+    const { resource, transcript: lines } = data;
 
-    // Located from the `seconds` ref rather than from `block`: this also runs when a
-    // window lands, and by then playback has moved on from the render that scheduled it.
-    const next = nextWindow(lines, locate(lines, seconds.current).lineIndex, asked.current);
-    if (!next) return;
+    const timer = setTimeout(() => {
+      if (busy.current) return;
 
-    // Marked before the request rather than after it, so a window that fails is left
-    // alone instead of being asked for again on the next render. A reload retries it.
-    for (const asking of next.blocks) asked.current.add(asking);
-    busy.current = true;
-    setTranslating(true);
+      const earlier = windowsInFlight.get(id);
+      if (earlier) {
+        // Its answer goes to the store and to a screen that is no longer here, so it is
+        // read back from the store once it lands instead of being paid for twice.
+        busy.current = true;
+        setTranslating(true);
+        void earlier
+          .then(async () => {
+            const transcript = await getTranscript(id);
+            if (transcript)
+              setData((current) =>
+                current?.resource.id === id ? { ...current, transcript } : current,
+              );
+          })
+          .catch((failure: unknown) => setAnnotationError(reason(failure)))
+          .finally(() => {
+            busy.current = false;
+            setTranslating(false);
+            setPass((n) => n + 1);
+          });
+        return;
+      }
 
-    // Decided over the whole Transcript, never over the window: a window with no kana
-    // in it is not evidence that the episode is not Japanese, and Tokens appearing on
-    // some blocks and not others is the bug that would follow.
-    const targetLanguage =
-      resource.targetLanguage ?? (wantsJapanese(lines) ? JAPANESE : undefined);
+      // Located from the `seconds` ref rather than from `block`: this also runs when a
+      // window lands, and by then playback has moved on from the render that scheduled it.
+      const next = nextWindow(lines, locate(lines, seconds.current).lineIndex, asked.current);
+      if (!next) return;
 
-    annotator
-      .annotate(lines.slice(next.from, next.to), {
-        nativeLanguage: resource.nativeLanguage,
-        ...(targetLanguage && { targetLanguage }),
-      })
-      .then(async (annotated) => {
-        const merged = [...lines.slice(0, next.from), ...annotated, ...lines.slice(next.to)];
-        // Guarded by the Resource, not by an effect cleanup: an answer arriving after
-        // a seek is still this episode's, and dropping it would leave those Lines
-        // untranslated with their blocks already marked asked.
-        setData((current) =>
-          current?.resource.id === id ? { ...current, transcript: merged } : current,
-        );
-        // The Lines on their own. `save` would carry the Resource this screen read
-        // when it opened, overwriting the position written under it since.
-        await saveTranscript(id, merged);
-      })
-      .catch((failure: unknown) => setAnnotationError(reason(failure)))
-      .finally(() => {
-        busy.current = false;
-        setTranslating(false);
-        setPass((n) => n + 1);
-      });
+      // Marked before the request rather than after it, so a window that fails is left
+      // alone instead of being asked for again on the next render. A reload retries it.
+      for (const asking of next.blocks) asked.current.add(asking);
+      busy.current = true;
+      setTranslating(true);
+
+      // Decided over the whole Transcript, never over the window: a window with no kana
+      // in it is not evidence that the episode is not Japanese, and Tokens appearing on
+      // some blocks and not others is the bug that would follow.
+      const targetLanguage =
+        resource.targetLanguage ?? (wantsJapanese(lines) ? JAPANESE : undefined);
+
+      const request = annotator
+        .annotate(lines.slice(next.from, next.to), {
+          nativeLanguage: resource.nativeLanguage,
+          ...(targetLanguage && { targetLanguage }),
+        })
+        .then(async (annotated) => {
+          const merged = [...lines.slice(0, next.from), ...annotated, ...lines.slice(next.to)];
+          // Guarded by the Resource, not by an effect cleanup: an answer arriving after
+          // a seek is still this episode's, and dropping it would leave those Lines
+          // untranslated with their blocks already marked asked.
+          setData((current) =>
+            current?.resource.id === id ? { ...current, transcript: merged } : current,
+          );
+          // The Lines on their own. `save` would carry the Resource this screen read
+          // when it opened, overwriting the position written under it since.
+          await saveTranscript(id, merged);
+          return true;
+        })
+        .catch((failure: unknown) => {
+          setAnnotationError(reason(failure));
+          return false;
+        })
+        .then((landed) => {
+          windowsInFlight.delete(id);
+          busy.current = false;
+          setTranslating(false);
+          if (landed) setPass((n) => n + 1);
+        });
+      windowsInFlight.set(id, request);
+    }, SETTLE_MS);
+    return () => clearTimeout(timer);
   }, [annotator, data, id, block, pass]);
 
   /**
@@ -663,16 +728,33 @@ export function PlayerScreen({ id }: { id: string }) {
     return () => removeEventListener("keydown", onKey);
   }, [data]);
 
-  // Keep the current Line in view while following is on. Re-running this when
-  // following turns back on is what sends the view straight to the current Line —
-  // the floating control just flips the flag, no separate imperative scroll needed.
-  useEffect(() => {
-    if (!following || position.lineIndex < 0) return;
-    listRef.current?.children[position.lineIndex]?.scrollIntoView({
-      block: "center",
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
-  }, [position.lineIndex, following]);
+  /** The Line the view last glided to, so that a re-run for any other reason holds still. */
+  const followed = useRef(-1);
+
+  /**
+   * Keep the current Line in view while following is on. Re-running this when following
+   * turns back on is what sends the view straight to the current Line — the floating
+   * control just flips the flag, no separate imperative scroll needed.
+   *
+   * A new Line glides into place; anything else that moves it is undone in the same
+   * frame. Translations landing, Tokens arriving and a change of subtitle mode all reflow
+   * the Lines above the one being read, and nothing else would put it back: with every
+   * translation hidden at once, the current Line moved 113px on a phone even in Chrome,
+   * whose scroll anchoring holds still only what sits at the top of the list. A layout
+   * effect, so that the correction lands before the frame that would have shown the jump.
+   */
+  useLayoutEffect(() => {
+    const row = listRef.current?.children[position.lineIndex];
+    if (!following || !row) {
+      followed.current = -1;
+      return;
+    }
+    const glide =
+      followed.current !== position.lineIndex &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    followed.current = position.lineIndex;
+    row.scrollIntoView({ block: "center", behavior: glide ? "smooth" : "auto" });
+  }, [position.lineIndex, following, data?.transcript, mode]);
 
   /**
    * The lock screen, the notification shade and the headphone buttons. Worth wiring
@@ -1234,11 +1316,15 @@ const LineRow = memo(function LineRow({
 /**
  * Three renderings of one Line, in priority order:
  *
- * 1. The current Line with Tokens — furigana and part-of-speech colouring, shown
- *    only while it plays (ADR 0005), swept via `tokenWords`, which lights each Token
+ * 1. Any Line with Tokens — furigana and part-of-speech colouring. Every such Line
+ *    carries them, lit or not, and the stylesheet shows them only on the one that plays
+ *    (ADR 0005): a reading takes room above its text, and drawn on the current Line
+ *    alone it made that Line taller as it lit and shorter as it passed, moving every
+ *    Line below. The current Line is swept via `tokenWords`, which lights each Token
  *    for the whole run of Words it covers rather than for the first of them.
  * 2. The current Line with Words — the same sweep over slices of the Line's own
- *    text, so the spaces between words survive (ADR 0004).
+ *    text, so the spaces between words survive (ADR 0004). Those are plain inline
+ *    spans, which wrap exactly as the text does, so they can stay the current Line's.
  * 3. Everything else — plain text.
  *
  * Tokens and Words are never merged into one list: they are different things
@@ -1259,14 +1345,14 @@ function LineText({
   const spokenBy = useMemo(() => tokenWords(line), [line]);
   const slices = useMemo(() => wordSlices(line), [line]);
 
-  if (current && line.tokens?.length) {
+  if (line.tokens?.length) {
     return (
       <>
         {line.tokens.map((token, index) => (
           <TokenText
             key={index}
             token={token}
-            sweep={sweepState(spokenBy?.[index], wordIndex)}
+            sweep={current ? sweepState(spokenBy?.[index], wordIndex) : ""}
           />
         ))}
       </>
@@ -1287,12 +1373,18 @@ function LineText({
   return <>{line.text}</>;
 }
 
-/** Furigana is native HTML; a reading is only present when the surface has kanji. */
+/**
+ * Furigana is native HTML; a reading is only present when the surface has kanji. The
+ * reading has a span of its own so that the stylesheet can let it overhang its Token —
+ * see `rt .reading`.
+ */
 function TokenText({ token, sweep }: { token: Token; sweep: string }) {
   const body = token.reading ? (
     <ruby>
       {token.surface}
-      <rt>{token.reading}</rt>
+      <rt>
+        <span className="reading">{token.reading}</span>
+      </rt>
     </ruby>
   ) : (
     token.surface
