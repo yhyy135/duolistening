@@ -15,3 +15,11 @@ skills-lock.json
 src/web/public/*
 !src/web/public/manifest.webmanifest
 !src/web/public/sw.js
+# Impeccable's working files: the direction round's demos and question logs, review
+# captures, the hook's cache and this machine's own config. What it keeps for good —
+# design.json and the surface briefs — is committed.
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/review/

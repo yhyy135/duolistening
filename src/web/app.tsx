@@ -1,4 +1,6 @@
-// The shell: the hash route and the header.
+// The shell: the hash route and the Native Language. Each screen draws its own top bar,
+// because each has a different job for it — the shelf's is the app's name, the
+// player's is a way back, and the Settings screen's holds an armed Back of its own.
 //
 // There is no access gate any more, and its absence is the point rather than an
 // omission. ADR 0001 added a single shared password because a deployment held one
@@ -8,44 +10,12 @@
 
 import { useEffect, useState } from "react";
 import type { LanguageCode } from "../shared/model.ts";
-import { Icon, type IconName } from "./icons.tsx";
-import { LocaleContext, cachedLocale, rememberLocale, useT } from "./i18n.ts";
+import { syncChrome } from "./appearance.ts";
+import { LocaleContext, cachedLocale, rememberLocale } from "./i18n.ts";
 import { LibraryScreen } from "./library.tsx";
 import { PlayerScreen } from "./player.tsx";
 import { SettingsScreen } from "./settings.tsx";
 import { readSettings } from "./store.ts";
-
-/**
- * Auto, and the two ways to overrule it. Auto is stored and applied as the absence of
- * `data-theme`, so the CSS needs no rule for it — the media query is simply back in
- * charge. index.html applies the stored choice before first paint; this only keeps
- * the attribute in step with the button.
- */
-const THEMES = ["auto", "light", "dark"] as const;
-type Theme = (typeof THEMES)[number];
-const THEME_KEY = "duolistening.theme";
-const THEME_ICONS: Record<Theme, IconName> = {
-  auto: "display",
-  light: "sun",
-  dark: "moon",
-};
-
-function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem(THEME_KEY);
-    // Anything else in that key is someone else's data, or ours from a version that
-    // spelled it differently. Either way the system preference is the safe answer.
-    return THEMES.includes(stored as Theme) ? (stored as Theme) : "auto";
-  });
-
-  useEffect(() => {
-    if (theme === "auto") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme;
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
-
-  return [theme, () => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]!)];
-}
 
 /** The current hash route, re-read on every back/forward and every link click. */
 function useHash(): string {
@@ -95,75 +65,28 @@ function useLocale(): [LanguageCode, (code: LanguageCode) => void] {
 
 export function App() {
   const [locale, setLocale] = useLocale();
-  return (
-    <LocaleContext.Provider value={locale}>
-      <Shell onLocale={setLocale} />
-    </LocaleContext.Provider>
-  );
-}
-
-function Shell({ onLocale }: { onLocale: (code: LanguageCode) => void }) {
-  const [theme, cycleTheme] = useTheme();
   const hash = useHash();
-  const t = useT();
-  const themeLabel: Record<Theme, string> = {
-    auto: t("theme.auto"),
-    light: t("theme.light"),
-    dark: t("theme.dark"),
-  };
+
+  // The status bar takes the ground the page is actually showing. With the theme on
+  // auto the system can switch schemes under an open page, and nothing else would
+  // tell the chrome.
+  useEffect(() => {
+    syncChrome();
+    const scheme = matchMedia("(prefers-color-scheme: dark)");
+    scheme.addEventListener("change", syncChrome);
+    return () => scheme.removeEventListener("change", syncChrome);
+  }, []);
 
   const resourceId = hash.startsWith("#/r/") ? decodeURIComponent(hash.slice(4)) : null;
-  /** Which screen the hash resolves to, decided once — the switch below reads it too. */
-  const onShelf = !resourceId && hash !== "#/settings";
   return (
-    <>
-      <header>
-        <a
-          href="#/"
-          className="brand"
-          onClick={(event) => {
-            // On the shelf this href points where the reader already is, so the click
-            // does nothing at all — no hash change, no re-render. A reload is what it
-            // means there, and the shelf is the one screen where one costs nothing:
-            // there is no playback to lose and no form half filled in. Off the shelf
-            // it stays a link home.
-            if (!onShelf) return;
-            event.preventDefault();
-            location.reload();
-          }}
-        >
-          {/* The file the favicon already points at, rather than a second drawing of
-              the same mark in SVG — two of them drift. The path is relative for the
-              reason the manifest's are: hash routing never changes the document's
-              path, so it resolves at the app root wherever the bundle is unpacked.
-              Decorative, because the name is written beside it. */}
-          <img src="icon-192.png" alt="" width={20} height={20} />
-          Duolistening
-        </a>
-        <a href="#/settings" aria-label={t("nav.settings")} title={t("nav.settings")}>
-          <Icon name="gear" />
-        </a>
-        {/* The label the text used to carry is now the accessible name, and it still
-            says which of the three modes is in force rather than which one the click
-            would move to — a control that announces its own state. "Auto" gets the
-            screen it defers to, because there is no glyph for "whatever you set your
-            system to" and a half-lit sun would read as a third theme. */}
-        <button
-          className="theme"
-          onClick={cycleTheme}
-          aria-label={themeLabel[theme]}
-          title={`${themeLabel.auto} / ${themeLabel.light} / ${themeLabel.dark}`}
-        >
-          <Icon name={THEME_ICONS[theme]} />
-        </button>
-      </header>
+    <LocaleContext.Provider value={locale}>
       {resourceId ? (
         <PlayerScreen id={resourceId} />
-      ) : onShelf ? (
-        <LibraryScreen />
+      ) : hash === "#/settings" ? (
+        <SettingsScreen onLocale={setLocale} />
       ) : (
-        <SettingsScreen onLocale={onLocale} />
+        <LibraryScreen />
       )}
-    </>
+    </LocaleContext.Provider>
   );
 }

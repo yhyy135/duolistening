@@ -42,6 +42,8 @@ export interface Episode {
   durationSec?: number;
   /** ISO 8601. */
   publishedAt?: string;
+  /** The episode's own cover, when the feed gives it one. The show's otherwise. */
+  artworkUrl?: string;
 }
 
 /**
@@ -113,6 +115,14 @@ export interface Resource {
   id: ResourceId;
   source: SourceRef;
   title: string;
+  /** The show this episode belongs to — the feed's own title, when it had one. */
+  showTitle?: string;
+  /**
+   * The cover, as the URL the feed gave for it. Loaded straight from whoever hosts it
+   * and never stored, which is why a Library opened offline shows a monogram in its
+   * place (`cover.tsx`). Absent on anything imported before covers were recorded.
+   */
+  artworkUrl?: string;
   durationSec: number;
   /**
    * The language pair this Resource was transcribed and translated in — recorded
@@ -138,6 +148,8 @@ export interface Resource {
   failureReason?: string;
   /** Where playback stopped last time, so the Library can drop the user back in. */
   lastPositionSec?: number;
+  /** ISO 8601. When that position was written — what "continue listening" picks by. */
+  lastPlayedAt?: string;
 }
 
 export interface ModelSlot {

@@ -1,0 +1,1190 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-14T10:57:39.813Z",
+  "title": "Design System: Duolistening",
+  "extensions": {
+    "looks": {
+      "attribute": "data-look",
+      "default": "standard (attribute absent)",
+      "values": ["station"],
+      "theme": {
+        "attribute": "data-theme",
+        "default": "auto (attribute absent)",
+        "values": ["light", "dark"]
+      },
+      "storage": {
+        "look": "localStorage duolistening.look",
+        "theme": "localStorage duolistening.theme"
+      },
+      "appliedBy": "blocking script in src/web/index.html before first paint; src/web/appearance.ts on change",
+      "aliases": [
+        "ground",
+        "raised",
+        "field",
+        "thumb",
+        "hairline",
+        "ink",
+        "dim",
+        "faint",
+        "accent",
+        "on-accent",
+        "accent-soft",
+        "bad",
+        "good"
+      ],
+      "aliasPrefix": {
+        "standard": "--std-",
+        "station": "--sta-"
+      },
+      "nonColorTokens": [
+        {
+          "name": "--pending",
+          "light": "0.55",
+          "dark": "0.4",
+          "purpose": "Opacity of a Word or Token not yet spoken."
+        },
+        {
+          "name": "--wash",
+          "light": "0.5",
+          "dark": "0.6",
+          "purpose": "Opacity of Standard's blurred cover wash behind the player."
+        }
+      ]
+    },
+    "colorMeta": {
+      "std-ground": {
+        "role": "neutral",
+        "displayName": "Page White / Night",
+        "canonical": "light-dark(#ffffff, #0c0d10)",
+        "light": "#ffffff",
+        "dark": "#0c0d10",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "std-raised": {
+        "role": "neutral",
+        "displayName": "Raised Grey",
+        "canonical": "light-dark(#f4f5f7, #17181c)",
+        "light": "#f4f5f7",
+        "dark": "#17181c",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "std-field": {
+        "role": "neutral",
+        "displayName": "Field Grey",
+        "canonical": "light-dark(#eceef1, #222328)",
+        "light": "#eceef1",
+        "dark": "#222328",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#242527",
+          "#404244",
+          "#606164",
+          "#818285",
+          "#a3a5a8",
+          "#c7c9cc",
+          "#edeff2"
+        ]
+      },
+      "std-thumb": {
+        "role": "neutral",
+        "displayName": "Thumb",
+        "canonical": "light-dark(#ffffff, #3a3c43)",
+        "light": "#ffffff",
+        "dark": "#3a3c43",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "std-hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "light-dark(#e3e5e9, #2b2d33)",
+        "light": "#e3e5e9",
+        "dark": "#2b2d33",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#242528",
+          "#404245",
+          "#5f6165",
+          "#808286",
+          "#a3a5a9",
+          "#c7c9cd",
+          "#eceef2"
+        ]
+      },
+      "std-ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "light-dark(#111318, #f3f4f6)",
+        "light": "#111318",
+        "dark": "#f3f4f6",
+        "tonalRamp": [
+          "#090b10",
+          "#23252a",
+          "#3f4248",
+          "#5e6168",
+          "#7f8289",
+          "#a2a5ac",
+          "#c6c9d0",
+          "#ebeef6"
+        ]
+      },
+      "std-dim": {
+        "role": "neutral",
+        "displayName": "Dim",
+        "canonical": "light-dark(#585e6a, #a4a9b3)",
+        "light": "#585e6a",
+        "dark": "#a4a9b3",
+        "tonalRamp": [
+          "#070b14",
+          "#20252f",
+          "#3c424d",
+          "#5b616d",
+          "#7c828f",
+          "#9fa5b3",
+          "#c2c9d7",
+          "#e8effd"
+        ]
+      },
+      "std-faint": {
+        "role": "neutral",
+        "displayName": "Faint Line",
+        "canonical": "light-dark(#6a707c, #7c818b)",
+        "light": "#6a707c",
+        "dark": "#7c818b",
+        "tonalRamp": [
+          "#070b14",
+          "#20252f",
+          "#3d424d",
+          "#5b616d",
+          "#7c828f",
+          "#9fa5b2",
+          "#c3c9d7",
+          "#e8effd"
+        ]
+      },
+      "std-accent": {
+        "role": "primary",
+        "displayName": "Lyric Blue",
+        "canonical": "light-dark(#2459d6, #5b8def)",
+        "light": "#2459d6",
+        "dark": "#5b8def",
+        "tonalRamp": [
+          "#0f005f",
+          "#000084",
+          "#002daa",
+          "#1f54d0",
+          "#4079f8",
+          "#619eff",
+          "#83c3ff",
+          "#a7eaff"
+        ]
+      },
+      "std-on-accent": {
+        "role": "primary",
+        "displayName": "On Lyric Blue",
+        "canonical": "light-dark(#ffffff, #0c0d10)",
+        "light": "#ffffff",
+        "dark": "#0c0d10",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "std-accent-soft": {
+        "role": "primary",
+        "displayName": "Lyric Blue Tint",
+        "canonical": "light-dark(#e6edfc, #1c2945)",
+        "light": "#e6edfc",
+        "dark": "#1c2945",
+        "tonalRamp": [
+          "#070b14",
+          "#202530",
+          "#3c424e",
+          "#5b616e",
+          "#7c8290",
+          "#9fa5b3",
+          "#c2c9d8",
+          "#e8effe"
+        ]
+      },
+      "std-bad": {
+        "role": "tertiary",
+        "displayName": "Failure Red",
+        "canonical": "light-dark(#c8292b, #ff7b72)",
+        "light": "#c8292b",
+        "dark": "#ff7b72",
+        "tonalRamp": [
+          "#3e0000",
+          "#660000",
+          "#8e0000",
+          "#b60d1b",
+          "#df423e",
+          "#ff6961",
+          "#ff8f84",
+          "#ffb5a8"
+        ]
+      },
+      "std-good": {
+        "role": "tertiary",
+        "displayName": "Success Green",
+        "canonical": "light-dark(#13804f, #6fd49b)",
+        "light": "#13804f",
+        "dark": "#6fd49b",
+        "tonalRamp": [
+          "#001600",
+          "#003408",
+          "#005326",
+          "#007545",
+          "#359765",
+          "#5cbc87",
+          "#82e1aa",
+          "#a7ffce"
+        ]
+      },
+      "sta-ground": {
+        "role": "neutral",
+        "displayName": "Platform Concrete",
+        "canonical": "light-dark(#e8eae5, #0b0c0c)",
+        "light": "#e8eae5",
+        "dark": "#0b0c0c",
+        "tonalRamp": [
+          "#0a0c09",
+          "#242622",
+          "#41433f",
+          "#60625e",
+          "#81837f",
+          "#a4a6a1",
+          "#c8cac5",
+          "#edefea"
+        ]
+      },
+      "sta-raised": {
+        "role": "neutral",
+        "displayName": "Sign Panel",
+        "canonical": "light-dark(#ffffff, #151716)",
+        "light": "#ffffff",
+        "dark": "#151716",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "sta-field": {
+        "role": "neutral",
+        "displayName": "Field",
+        "canonical": "light-dark(#ffffff, #0f1110)",
+        "light": "#ffffff",
+        "dark": "#0f1110",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "sta-thumb": {
+        "role": "neutral",
+        "displayName": "Ink Thumb",
+        "canonical": "light-dark(#14171c, #eef1ea)",
+        "light": "#14171c",
+        "dark": "#eef1ea",
+        "tonalRamp": [
+          "#090b10",
+          "#22252b",
+          "#3f4248",
+          "#5e6168",
+          "#7f8389",
+          "#a1a5ac",
+          "#c5c9d0",
+          "#eaeff6"
+        ]
+      },
+      "sta-hairline": {
+        "role": "neutral",
+        "displayName": "Track Ahead",
+        "canonical": "light-dark(#cbd0c8, #2b2f2d)",
+        "light": "#cbd0c8",
+        "dark": "#2b2f2d",
+        "tonalRamp": [
+          "#090c07",
+          "#232620",
+          "#3f433d",
+          "#5e635c",
+          "#7f847d",
+          "#a2a79f",
+          "#c6cbc3",
+          "#ebf0e8"
+        ]
+      },
+      "sta-ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "light-dark(#14171c, #eef1ea)",
+        "light": "#14171c",
+        "dark": "#eef1ea",
+        "tonalRamp": [
+          "#090b10",
+          "#22252b",
+          "#3f4248",
+          "#5e6168",
+          "#7f8389",
+          "#a1a5ac",
+          "#c5c9d0",
+          "#eaeff6"
+        ]
+      },
+      "sta-dim": {
+        "role": "neutral",
+        "displayName": "Dim",
+        "canonical": "light-dark(#434a52, #b2b6b3)",
+        "light": "#434a52",
+        "dark": "#b2b6b3",
+        "tonalRamp": [
+          "#070c12",
+          "#1f262d",
+          "#3c434b",
+          "#5b626a",
+          "#7b838c",
+          "#9ea6af",
+          "#c2cad4",
+          "#e7eff9"
+        ]
+      },
+      "sta-faint": {
+        "role": "neutral",
+        "displayName": "Faint Stop",
+        "canonical": "light-dark(#5c636c, #878b89)",
+        "light": "#5c636c",
+        "dark": "#878b89",
+        "tonalRamp": [
+          "#070c12",
+          "#20262d",
+          "#3c434b",
+          "#5b626b",
+          "#7c838d",
+          "#9ea6b0",
+          "#c2cad4",
+          "#e7effa"
+        ]
+      },
+      "sta-accent": {
+        "role": "primary",
+        "displayName": "Route Green",
+        "canonical": "light-dark(#2b7a34, #7cc242)",
+        "light": "#2b7a34",
+        "dark": "#7cc242",
+        "tonalRamp": [
+          "#001500",
+          "#003300",
+          "#005208",
+          "#24742e",
+          "#49964f",
+          "#6dba71",
+          "#91e094",
+          "#b6ffb9"
+        ]
+      },
+      "sta-on-accent": {
+        "role": "primary",
+        "displayName": "On Route Green",
+        "canonical": "light-dark(#ffffff, #0b0c0c)",
+        "light": "#ffffff",
+        "dark": "#0b0c0c",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "sta-accent-soft": {
+        "role": "primary",
+        "displayName": "Route Green Tint",
+        "canonical": "light-dark(#2b7a3429, #7cc24238)",
+        "light": "#2b7a3429",
+        "dark": "#7cc24238",
+        "tonalRamp": [
+          "#001500",
+          "#003300",
+          "#005208",
+          "#24742e",
+          "#49964f",
+          "#6dba71",
+          "#91e094",
+          "#b6ffb9"
+        ]
+      },
+      "sta-bad": {
+        "role": "tertiary",
+        "displayName": "Failure Red (Station)",
+        "canonical": "light-dark(#c3172a, #ff5d63)",
+        "light": "#c3172a",
+        "dark": "#ff5d63",
+        "tonalRamp": [
+          "#3f0000",
+          "#670000",
+          "#900000",
+          "#b80021",
+          "#e13d43",
+          "#ff6565",
+          "#ff8c88",
+          "#ffb2ac"
+        ]
+      },
+      "sta-good": {
+        "role": "tertiary",
+        "displayName": "Route Green as Success",
+        "canonical": "light-dark(#2b7a34, #7cc242)",
+        "light": "#2b7a34",
+        "dark": "#7cc242",
+        "tonalRamp": [
+          "#001500",
+          "#003300",
+          "#005208",
+          "#24742e",
+          "#49964f",
+          "#6dba71",
+          "#91e094",
+          "#b6ffb9"
+        ]
+      },
+      "sta-led-ground": {
+        "role": "secondary",
+        "displayName": "LED Ground",
+        "canonical": "light-dark(#12171c, #050606)",
+        "light": "#12171c",
+        "dark": "#050606",
+        "tonalRamp": [
+          "#070c10",
+          "#20262b",
+          "#3d4349",
+          "#5c6268",
+          "#7d838a",
+          "#9fa6ad",
+          "#c3cad1",
+          "#e8eff7"
+        ]
+      },
+      "sta-led": {
+        "role": "secondary",
+        "displayName": "LED Amber",
+        "canonical": "light-dark(#ffa23e, #ffa84d)",
+        "light": "#ffa23e",
+        "dark": "#ffa84d",
+        "tonalRamp": [
+          "#2f0000",
+          "#530000",
+          "#762300",
+          "#9b4600",
+          "#c16900",
+          "#e78c1f",
+          "#ffb14f",
+          "#ffd677"
+        ]
+      },
+      "sta-led-off": {
+        "role": "secondary",
+        "displayName": "LED Amber, Unlit",
+        "canonical": "light-dark(#a8895f, #967853)",
+        "light": "#a8895f",
+        "dark": "#967853",
+        "tonalRamp": [
+          "#1b0400",
+          "#381f00",
+          "#573c11",
+          "#785b32",
+          "#9b7c53",
+          "#bf9f75",
+          "#e4c397",
+          "#ffe9bc"
+        ]
+      },
+      "sta-on-led": {
+        "role": "secondary",
+        "displayName": "Sign White",
+        "canonical": "light-dark(#f3f4ef, #eef1ea)",
+        "light": "#f3f4ef",
+        "dark": "#eef1ea",
+        "tonalRamp": [
+          "#0b0c08",
+          "#252522",
+          "#42423e",
+          "#61625d",
+          "#82837e",
+          "#a5a6a1",
+          "#c9cac5",
+          "#eeefea"
+        ]
+      },
+      "backdrop": {
+        "role": "neutral",
+        "displayName": "Modal Backdrop",
+        "canonical": "light-dark(#0c0d1080, #000000b3)",
+        "light": "#0c0d1080",
+        "dark": "#000000b3",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#242528",
+          "#414246",
+          "#606165",
+          "#818286",
+          "#a3a5a9",
+          "#c7c9cd",
+          "#edeef3"
+        ]
+      },
+      "shadow": {
+        "role": "neutral",
+        "displayName": "Shadow",
+        "canonical": "light-dark(#10131a2e, #00000099)",
+        "light": "#10131a2e",
+        "dark": "#00000099",
+        "tonalRamp": [
+          "#080b12",
+          "#22252d",
+          "#3e424a",
+          "#5d616a",
+          "#7e828c",
+          "#a1a5af",
+          "#c5c9d3",
+          "#eaeef9"
+        ]
+      },
+      "on-tile": {
+        "role": "tertiary",
+        "displayName": "On Tile",
+        "canonical": "light-dark(#ffffff, #ffffff)",
+        "light": "#ffffff",
+        "dark": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "tile-1": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 1",
+        "canonical": "light-dark(#3f6fd1, #3659a8)",
+        "light": "#3f6fd1",
+        "dark": "#3659a8",
+        "tonalRamp": [
+          "#05004d",
+          "#001171",
+          "#0c3895",
+          "#2c5abb",
+          "#4c7ee1",
+          "#6ea2ff",
+          "#90c7ff",
+          "#b4edff"
+        ]
+      },
+      "tile-2": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 2",
+        "canonical": "light-dark(#1f8a78, #1b6b5e)",
+        "light": "#1f8a78",
+        "dark": "#1b6b5e",
+        "tonalRamp": [
+          "#00150b",
+          "#003225",
+          "#005242",
+          "#007362",
+          "#2f9583",
+          "#58b9a5",
+          "#7edeca",
+          "#a4ffef"
+        ]
+      },
+      "tile-3": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 3",
+        "canonical": "light-dark(#b86c14, #9a5a10)",
+        "light": "#b86c14",
+        "dark": "#9a5a10",
+        "tonalRamp": [
+          "#2b0000",
+          "#4d0400",
+          "#702a00",
+          "#944b00",
+          "#b96d16",
+          "#df9043",
+          "#ffb569",
+          "#ffda8e"
+        ]
+      },
+      "tile-4": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 4",
+        "canonical": "light-dark(#c24563, #9c3650)",
+        "light": "#c24563",
+        "dark": "#9c3650",
+        "tonalRamp": [
+          "#350001",
+          "#5a0014",
+          "#81002f",
+          "#a72b4d",
+          "#cf516e",
+          "#f7758f",
+          "#ff99b3",
+          "#ffbfd7"
+        ]
+      },
+      "tile-5": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 5",
+        "canonical": "light-dark(#6f55c9, #5845a3)",
+        "light": "#6f55c9",
+        "dark": "#5845a3",
+        "tonalRamp": [
+          "#18004d",
+          "#2c0070",
+          "#462295",
+          "#6347ba",
+          "#836be1",
+          "#a58fff",
+          "#c8b3ff",
+          "#edd9ff"
+        ]
+      },
+      "tile-6": {
+        "role": "tertiary",
+        "displayName": "Cover Tile 6",
+        "canonical": "light-dark(#4b5563, #3b434f)",
+        "light": "#4b5563",
+        "dark": "#3b434f",
+        "tonalRamp": [
+          "#050b16",
+          "#1d2632",
+          "#394350",
+          "#586270",
+          "#788392",
+          "#9ba6b6",
+          "#becadb",
+          "#e4f0ff"
+        ]
+      },
+      "pos-noun": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: noun",
+        "canonical": "light-dark(#1f6099, #8ec7ff)",
+        "light": "#1f6099",
+        "dark": "#8ec7ff",
+        "tonalRamp": [
+          "#000337",
+          "#002458",
+          "#00447a",
+          "#24649e",
+          "#4887c3",
+          "#6baae8",
+          "#8ecfff",
+          "#b3f5ff"
+        ]
+      },
+      "pos-verb": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: verb",
+        "canonical": "light-dark(#a1481a, #ff9f7a)",
+        "light": "#a1481a",
+        "dark": "#ff9f7a",
+        "tonalRamp": [
+          "#2f0000",
+          "#520000",
+          "#762000",
+          "#9b4313",
+          "#c1653a",
+          "#e8885d",
+          "#ffac80",
+          "#ffd2a5"
+        ]
+      },
+      "pos-adjective": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: adjective",
+        "canonical": "light-dark(#7a5500, #ffd479)",
+        "light": "#7a5500",
+        "dark": "#ffd479",
+        "tonalRamp": [
+          "#1f0100",
+          "#3d1b00",
+          "#5d3a00",
+          "#7f5a09",
+          "#a27b36",
+          "#c69e5a",
+          "#ecc27d",
+          "#ffe8a2"
+        ]
+      },
+      "pos-adverb": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: adverb",
+        "canonical": "light-dark(#5f39ab, #c9a2ff)",
+        "light": "#5f39ab",
+        "dark": "#c9a2ff",
+        "tonalRamp": [
+          "#19004a",
+          "#30006e",
+          "#4b1f92",
+          "#6945b8",
+          "#8a68de",
+          "#ac8cff",
+          "#d0b1ff",
+          "#f5d6ff"
+        ]
+      },
+      "pos-particle": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: particle",
+        "canonical": "light-dark(#626979, #7c8496)",
+        "light": "#626979",
+        "dark": "#7c8496",
+        "tonalRamp": [
+          "#060b16",
+          "#1f2532",
+          "#3b4251",
+          "#5a6171",
+          "#7b8293",
+          "#9da5b6",
+          "#c1c9db",
+          "#e6efff"
+        ]
+      },
+      "pos-auxiliary": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: auxiliary",
+        "canonical": "light-dark(#5b6478, #9aa4bd)",
+        "light": "#5b6478",
+        "dark": "#9aa4bd",
+        "tonalRamp": [
+          "#050a19",
+          "#1d2536",
+          "#3a4254",
+          "#586175",
+          "#798297",
+          "#9ba5bb",
+          "#bfc9e0",
+          "#e4efff"
+        ]
+      },
+      "pos-conjunction": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: conjunction",
+        "canonical": "light-dark(#0d6b5c, #7ad9c4)",
+        "light": "#0d6b5c",
+        "dark": "#7ad9c4",
+        "tonalRamp": [
+          "#00140b",
+          "#003125",
+          "#005042",
+          "#177161",
+          "#429382",
+          "#66b6a5",
+          "#8bdbc9",
+          "#b0ffef"
+        ]
+      },
+      "pos-prefix": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: prefix",
+        "canonical": "light-dark(#8a5050, #d0a6a6)",
+        "light": "#8a5050",
+        "dark": "#d0a6a6",
+        "tonalRamp": [
+          "#230001",
+          "#441114",
+          "#652f30",
+          "#884e4e",
+          "#ac6f6f",
+          "#d29291",
+          "#f8b5b4",
+          "#ffdad9"
+        ]
+      },
+      "pos-interjection": {
+        "role": "tertiary",
+        "displayName": "Part of Speech: interjection",
+        "canonical": "light-dark(#a82f72, #ff9ecb)",
+        "light": "#a82f72",
+        "dark": "#ff9ecb",
+        "tonalRamp": [
+          "#310013",
+          "#57002f",
+          "#7c004d",
+          "#a2296d",
+          "#c94f8f",
+          "#f173b2",
+          "#ff97d7",
+          "#ffbdfd"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "std-line-wide": {
+        "displayName": "Line (Standard, wide)",
+        "purpose": "Lyric text at 60rem and up."
+      },
+      "std-line": {
+        "displayName": "Line (Standard)",
+        "purpose": "Lyric text on phones; current Line lifts by scale(1.03)."
+      },
+      "sta-line": {
+        "displayName": "Line (Station)",
+        "purpose": "Timetable stop text; 1.125rem under 40rem; never changes size when lit."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings on the shelf and in Settings; Station 800 weight."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Top-bar titles, shelf rows, legends."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base text; 16px on text fields under (hover: none)."
+      },
+      "translation": {
+        "displayName": "Translation",
+        "purpose": "Native-language line under each Line."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, segments, field labels, hints, phases."
+      },
+      "numeric": {
+        "displayName": "Numeric",
+        "purpose": "Clocks, counts, rate, stamps; always tabular."
+      },
+      "sta-status": {
+        "displayName": "LED Status",
+        "purpose": "Station ticker strip."
+      }
+    },
+    "fonts": [
+      {
+        "family": "Barlow",
+        "weights": [400, 500, 700],
+        "files": "src/web/fonts/barlow-latin-*-normal.woff2",
+        "license": "SIL OFL 1.1",
+        "unicodeRange": "Latin only",
+        "look": "station"
+      }
+    ],
+    "shadows": [
+      {
+        "name": "cover-lift",
+        "value": "0 12px 24px -16px var(--shadow)",
+        "purpose": "Standard covers on the shelf and Suggestions."
+      },
+      {
+        "name": "cover-lift-large",
+        "value": "0 28px 56px -28px var(--shadow)",
+        "purpose": "Standard's side-column cover."
+      },
+      {
+        "name": "accent-glow",
+        "value": "0 12px 24px -14px var(--accent)",
+        "purpose": "Standard play and resume buttons."
+      },
+      {
+        "name": "dock",
+        "value": "0 -12px 32px -24px var(--shadow)",
+        "purpose": "Standard phone dock."
+      },
+      {
+        "name": "sheet",
+        "value": "0 30px 70px -24px var(--shadow)",
+        "purpose": "Every dialog."
+      },
+      {
+        "name": "float",
+        "value": "0 10px 26px -12px var(--shadow)",
+        "purpose": "Jump-to-current, translating pill."
+      },
+      {
+        "name": "sta-frame",
+        "value": "inset 0 0 0 1px var(--hairline)",
+        "purpose": "Station panels; 1.5px on controls."
+      },
+      {
+        "name": "sta-current-stop",
+        "value": "inset 0 0 0 6px var(--accent)",
+        "purpose": "Station's current stop ring."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-lift",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Line lift, cover hover, sheet rise."
+      },
+      {
+        "name": "state",
+        "value": "0.15s",
+        "purpose": "Background, colour and ring changes on controls."
+      },
+      {
+        "name": "line-color",
+        "value": "0.3s",
+        "purpose": "A Line changing ink as it becomes current."
+      },
+      {
+        "name": "line-lift",
+        "value": "0.35s",
+        "purpose": "Standard's current Line scale."
+      },
+      {
+        "name": "sheet-up",
+        "value": "0.32s",
+        "purpose": "Bottom sheet entering on phones."
+      },
+      {
+        "name": "sweep",
+        "value": "0.12s opacity",
+        "purpose": "A Word or Token leaving pending."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "All transitions and animations under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "transfer-labels",
+        "value": "34rem"
+      },
+      {
+        "name": "sheet-bottom",
+        "value": "36rem"
+      },
+      {
+        "name": "station-phone",
+        "value": "40rem"
+      },
+      {
+        "name": "station-controls-row",
+        "value": "44rem"
+      },
+      {
+        "name": "standard-wide",
+        "value": "60rem"
+      },
+      {
+        "name": "touch",
+        "value": "(hover: none)"
+      }
+    ],
+    "openCeilingNotes": [
+      "Standard's lyric column has no edge fade.",
+      "Standard's monogram cover is flat.",
+      "Station's ticks sit below its band."
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The accent action; Standard pill.",
+      "html": "<button class=\"ds-btn-primary\">Import</button>",
+      "css": ".ds-btn-primary{font:600 15px/1.25 system-ui,sans-serif;background:var(--accent,#2459d6);color:var(--on-accent,#fff);border:0;border-radius:999px;padding:.5em 1.05em;cursor:pointer;transition:filter .15s,transform .08s}.ds-btn-primary:hover{filter:brightness(1.06)}.ds-btn-primary:active{transform:translateY(1px)}.ds-btn-primary:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Quiet action; dim text, raised on hover.",
+      "html": "<button class=\"ds-btn-ghost\">Export</button>",
+      "css": ".ds-btn-ghost{font:500 15px/1.25 system-ui,sans-serif;background:none;color:var(--dim,#585e6a);border:0;border-radius:999px;padding:.5em 1.05em;cursor:pointer;transition:background-color .15s,color .15s}.ds-btn-ghost:hover{background:var(--raised,#f4f5f7);color:var(--ink,#111318)}.ds-btn-ghost:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}"
+    },
+    {
+      "name": "Language Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Filter chip; selected in the accent.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip ds-on\">日本語</button><button class=\"ds-chip\">Español</button></div>",
+      "css": ".ds-chips{display:flex;gap:.5rem}.ds-chip{font:600 .875rem/1.25 system-ui,sans-serif;background:var(--raised,#f4f5f7);color:var(--dim,#585e6a);border:0;border-radius:999px;padding:.4em .95em;cursor:pointer}.ds-chip:hover{background:var(--field,#eceef1)}.ds-chip.ds-on{background:var(--accent,#2459d6);color:var(--on-accent,#fff)}.ds-chip:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Field background, 10px corners, accent outline on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search or paste a feed\">",
+      "css": ".ds-input{font:15px/1.5 system-ui,sans-serif;color:var(--ink,#111318);background:var(--field,#eceef1);border:1px solid transparent;border-radius:10px;padding:.55em .75em}.ds-input::placeholder{color:var(--dim,#585e6a)}.ds-input:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:0}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "topbar",
+      "description": "Back pill, title, icon button; hairline below.",
+      "html": "<header class=\"ds-bar\"><button class=\"ds-back\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M15 6l-6 6 6 6\"/></svg>Library</button><strong class=\"ds-bar-title\">ごん狐 01</strong></header>",
+      "css": ".ds-bar{display:flex;align-items:center;gap:.375rem;min-height:3.5rem;padding:.375rem .5rem;background:var(--ground,#fff);border-bottom:1px solid var(--hairline,#e3e5e9);font-family:system-ui,sans-serif;color:var(--ink,#111318)}.ds-back{display:inline-flex;align-items:center;gap:.2rem;font:600 15px system-ui,sans-serif;color:inherit;background:none;border:0;border-radius:999px;padding:.5em .8em .5em .35em;cursor:pointer}.ds-back:hover{background:var(--raised,#f4f5f7)}.ds-back:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}.ds-bar-title{font-size:1rem}"
+    },
+    {
+      "name": "Cover with Monogram",
+      "kind": "card",
+      "refersTo": "cover",
+      "description": "Show artwork; monogram tile when absent.",
+      "html": "<span class=\"ds-cover\">ごん</span>",
+      "css": ".ds-cover{display:grid;place-items:center;width:4.75rem;aspect-ratio:1;border-radius:12px;background:var(--tile-1,#3f6fd1);color:var(--on-tile,#fff);font:700 1.5rem/1 system-ui,sans-serif;letter-spacing:-.02em;box-shadow:0 10px 22px -12px var(--shadow,#10131a2e)}"
+    },
+    {
+      "name": "Lyric Line (Standard)",
+      "kind": "custom",
+      "refersTo": "std-line",
+      "description": "Faint Lines; current in ink with the spoken Word in the accent.",
+      "html": "<ol class=\"ds-lyrics\"><li><span class=\"ds-text\">そして夜でも昼でも</span><span class=\"ds-tr\">无论是夜晚还是白天</span></li><li class=\"ds-current\"><span class=\"ds-text\"><span>畑へ</span><span class=\"ds-now\">入って</span><span class=\"ds-pending\">芋を掘り散らし</span></span><span class=\"ds-tr\">跑到田里把番薯挖得到处都是</span></li></ol>",
+      "css": ".ds-lyrics{list-style:none;margin:0;padding:0;font-family:system-ui,sans-serif}.ds-lyrics li{padding:.625rem .75rem;border-radius:16px;color:var(--faint,#6a707c);transition:color .3s}.ds-lyrics li:hover{background:color-mix(in srgb,var(--ink,#111318) 4%,transparent)}.ds-text{display:block;font:700 1.3125rem/1.5 inherit;letter-spacing:-.005em;transform-origin:left center;transition:transform .35s cubic-bezier(.2,.8,.2,1)}.ds-tr{display:block;margin-top:.2rem;font-size:.9375rem}.ds-current{color:var(--ink,#111318)}.ds-current .ds-text{transform:scale(1.03)}.ds-now{color:var(--accent,#2459d6)}.ds-pending{opacity:var(--pending,.55)}"
+    },
+    {
+      "name": "Play Button",
+      "kind": "button",
+      "refersTo": "button-play",
+      "description": "The one filled, large transport control.",
+      "html": "<button class=\"ds-play\" aria-label=\"Play\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg></button>",
+      "css": ".ds-play{display:grid;place-items:center;width:3.75rem;height:3.75rem;border:0;border-radius:50%;background:var(--accent,#2459d6);color:var(--on-accent,#fff);box-shadow:0 12px 24px -14px var(--accent,#2459d6);cursor:pointer;transition:transform .08s}.ds-play:active{transform:translateY(1px)}.ds-play:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}"
+    },
+    {
+      "name": "Numbering Badge (Station)",
+      "kind": "custom",
+      "refersTo": "sta-line-badge",
+      "description": "Show code over studied language, framed in route green.",
+      "html": "<span class=\"ds-badge\"><b>ごん</b><i>JA</i></span>",
+      "css": ".ds-badge{display:grid;grid-template-rows:1fr 1fr;place-items:center;width:2.625rem;height:2.625rem;padding:2px 0;border:3px solid var(--sta-accent,#2b7a34);border-radius:8px;background:var(--sta-raised,#fff);color:var(--sta-ink,#14171c);line-height:1;font-family:Barlow,system-ui,sans-serif}.ds-badge b{align-self:end;font-size:.8125rem;font-weight:800;letter-spacing:.02em}.ds-badge i{align-self:start;padding-top:1px;font-size:.6875rem;font-style:normal;font-weight:700;color:var(--sta-dim,#434a52)}"
+    },
+    {
+      "name": "Timetable Stop and LED Strip (Station)",
+      "kind": "custom",
+      "refersTo": "sta-ticker",
+      "description": "A current stop on the route above the amber status strip.",
+      "html": "<div class=\"ds-sta\"><div class=\"ds-stop\"><span class=\"ds-stamp\">01:02</span><span class=\"ds-route\"></span><span class=\"ds-line\">畑へ入って芋を掘り散らしたり</span></div><p class=\"ds-ticker\"><span>Paused</span><span>Line 15 of 66</span><span class=\"ds-off\">Repeat Off</span></p></div>",
+      "css": ".ds-sta{font-family:Barlow,system-ui,sans-serif;background:var(--sta-ground,#e8eae5);color:var(--sta-ink,#14171c)}.ds-stop{position:relative;display:grid;grid-template-columns:3.25rem 2.25rem 1fr;column-gap:.75rem;padding:.7rem 0}.ds-stamp{text-align:right;padding-top:.5rem;font:700 .75rem Barlow,sans-serif;font-variant-numeric:tabular-nums}.ds-route{position:relative}.ds-route::before{content:'';position:absolute;left:calc(1.125rem - 2px);top:0;bottom:0;width:4px;background:linear-gradient(var(--sta-accent,#2b7a34) 0 .8rem,var(--sta-hairline,#cbd0c8) .8rem)}.ds-route::after{content:'';position:absolute;left:1.125rem;top:.8rem;width:1.625rem;height:1.625rem;translate:-50% -50%;border-radius:50%;background:var(--sta-raised,#fff);box-shadow:inset 0 0 0 6px var(--sta-accent,#2b7a34)}.ds-line{font:500 1.3125rem/1.6 inherit;letter-spacing:.01em}.ds-ticker{display:flex;justify-content:center;gap:1.5rem;margin:0;padding:.4rem 1rem;background:var(--sta-led-ground,#12171c);color:var(--sta-led,#ffa23e);font:700 .75rem Barlow,sans-serif;letter-spacing:.06em;font-variant-numeric:tabular-nums}.ds-off{color:var(--sta-led-off,#a8895f)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "One Transcript, Two Readings",
+    "overview": "The Line is what gets studied, and both looks are built to show where the current Line is. **Standard** is the default. It is a music app's lyric page played straight, measured against NetEase Cloud Music and QQ Music. The show's cover sets the mood, only the current Line is drawn at full ink, and its words fill with one blue accent as they are spoken. **Station** is the alternative, and it reads the same Transcript as a railway timetable. Every Line is a stop on one route in route green. Passed stops are filled, the current stop is ringed, and an amber LED strip reports status.\n\nBoth looks draw the same DOM (ADR 0016). The look is `data-look=\"station\"` on `<html>`, and when the attribute is absent the page is Standard. The theme is `data-theme=\"light|dark\"`, and when that is absent the system decides. Each device stores both in localStorage. A blocking script in `index.html` applies them before first paint, and Settings → Appearance changes them immediately through `appearance.ts`. Neither is part of the stored Settings, and neither travels in the transfer string. Each look is kept at full fidelity, and neither is a reskin of the other. The product is study, not a game: no streaks, mascots or reward animations.\n\nDensity is calm and even. A 60rem column is used on the shelf, a 40rem column in Settings, and Standard's player splits into a side column and the Lines on wide screens. The only motion that carries meaning is the sweep. Every other transition is a courtesy, and reduced motion switches all of them off.",
+    "keyCharacteristics": [
+      "Two looks over one DOM, each in light, dark and auto, chosen per device.",
+      "Every colour is a `light-dark()` token, and rules use aliases rather than a look's palette.",
+      "Standard: a system sans, pills and round transport buttons, real cover art, a blurred cover wash, one blue accent.",
+      "Station: Barlow for Latin, square sign panels, the route in green, amber LED status, a numbering badge per show.",
+      "CJK text is never given a named family. The `lang` on each Line picks the glyph forms.",
+      "Tabular numerals wherever a number changes as you watch."
+    ],
+    "rules": [
+      {
+        "name": "The One Token Rule",
+        "body": "Every colour is a single `light-dark()` token in the palette block. No rule below the palettes names a colour, not even `#fff`.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Opacity Tokens Rule",
+        "body": "`--pending`, the fade on a Word that has not been spoken (0.55 light, 0.4 dark), and `--wash`, the opacity of the cover wash (0.5 light, 0.6 dark), are not colours. `light-dark()` cannot hold them, so each states both themes the long way, under `prefers-color-scheme` and under `data-theme`.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reserved Accent Rule",
+        "body": "In each look the accent marks playback and selection and nothing decorative. Standard's blue is never put on a heading or a border. Station's green follows the route and is never painted along an edge as a stripe. The same green value also serves as Station's `--good`, and cover art keeps its own colours.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Alarm Rule",
+        "body": "In Station, amber reports state and red means only that something failed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Language Picks the Glyph Rule",
+        "body": "No font stack names a CJK family. Every Line and every translation carries `lang`, and that attribute chooses between Japanese and Chinese forms of the same character.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Clock Rule",
+        "body": "Clocks, counts, rate, Station stamps and the ticker use `font-variant-numeric: tabular-nums`, so digits do not shift as they change.",
+        "section": "typography"
+      },
+      {
+        "name": "The Barlow Is Latin Rule",
+        "body": "Barlow is Station's only webfont. Its `unicode-range` keeps it to Latin, and Standard never loads it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Cover Wash Rule",
+        "body": "Standard's player sits over its cover, blurred 72px, saturated 1.5, scaled 1.35, at `--wash` opacity, and covered by the ground at 74%. The wash never lowers the Lines' contrast. Station draws no wash.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** add every new colour as one `light-dark()` pair under `--std-` and under `--sta-`, and point an alias at them. Rules should reference the alias.",
+      "**Do** style Station by overriding the same DOM under `:root[data-look=\"station\"]`. Hide parts of one look with `display: none` in the other rather than adding a second structure.",
+      "**Do** keep a 44px minimum on touch targets and 16px on text fields under `(hover: none)`.",
+      "**Do** set `lang` on any text in the studied language, and use `tabular-nums` on any number that changes while playing.",
+      "**Do** make a lit state change colour, a transform, or a box-shadow ring, never a width or padding. In Station, colour only.",
+      "**Do** make every dialog a `.sheet`, and wrap motion so reduced motion disables it.",
+      "**Do** use a show's real artwork, with a monogram tile when there is none."
+    ],
+    "donts": [
+      "**Don't** write a hex value, `rgb()` or a named colour below the palette block.",
+      "**Don't** name a CJK font family in any stack.",
+      "**Don't** use Standard's blue for anything but play, the word fill, progress, focus and selection. Don't use Station's green for anything off the route, play and selection. Don't use red for anything but failure.",
+      "**Don't** round Station's panels, controls or Lines beyond 4px. The only rounded exceptions are stops, circular transport buttons and the numbering badge.",
+      "**Don't** draw a coloured side border to mark a Line or a card as active. Use a filled stop, a badge, an inset ring or the accent fill.",
+      "**Don't** name a class `pending`, `now`, `said`, `passed`, `current` or `next` for anything other than the sweep and Line states.",
+      "**Don't** set `maximum-scale` on the viewport or use `type=\"password\"` on a key field.",
+      "**Don't** add streaks, mascots, reward animations or celebratory motion."
+    ]
+  }
+}

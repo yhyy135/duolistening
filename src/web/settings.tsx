@@ -1,5 +1,5 @@
-// Settings: the two model slots (ADR 0002), the byte proxy (ADR 0009), and the
-// language pair.
+// Settings: how this device draws the app, the two model slots (ADR 0002), the byte
+// proxy (ADR 0009), and the language pair.
 //
 // The masking used to protect a wire: the server sent `••••abcd`, a value coming
 // back still masked meant "leave the stored key alone", and a Show button fetched
@@ -22,7 +22,16 @@ import {
   type SettingsCheck,
   type SlotCheck,
 } from "../shared/model.ts";
-import { Icon } from "./icons.tsx";
+import {
+  LOOKS,
+  THEMES,
+  applyLook,
+  applyTheme,
+  storedLook,
+  storedTheme,
+  type Theme,
+} from "./appearance.ts";
+import { Icon, type IconName } from "./icons.tsx";
 import { t as translate } from "../shared/i18n.ts";
 import { rememberLocale, useLanguageName, useT } from "./i18n.ts";
 import { checkSettings } from "./model-check.ts";
@@ -146,7 +155,23 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
     );
   }, []);
 
-  if (!settings) return <p className="notice">{status ?? t("common.loading")}</p>;
+  if (!settings) {
+    // Still a way out: an installed app has no browser Back button, and a store that
+    // would not open leaves this message up for as long as the screen is.
+    return (
+      <>
+        <header className="topbar">
+          <a href="#/" className="back">
+            <Icon name="chevron-left" />
+            <span>{t("nav.library")}</span>
+          </a>
+        </header>
+        <main className="settings">
+          <p className="notice">{status ?? t("common.loading")}</p>
+        </main>
+      </>
+    );
+  }
 
   const edit = (change: Partial<Settings>) => {
     setSettings({ ...settings, ...change });
@@ -246,8 +271,8 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
   }
 
   return (
-    <main className="settings">
-      <div className="settings-head">
+    <>
+      <header className="topbar settings-bar">
         {/* Focus leaving disarms it, so a Back armed and then ignored is not a trap
             waiting for the next person who reaches for it. */}
         <button
@@ -256,106 +281,190 @@ export function SettingsScreen({ onLocale }: { onLocale: (code: LanguageCode) =>
           onClick={goBack}
           onBlur={() => setDiscarding(false)}
         >
-          <Icon name="arrow-left" />
-          {discarding ? t("settings.discard") : t("common.back")}
+          <Icon name="chevron-left" />
+          <span>{discarding ? t("settings.discard") : t("common.back")}</span>
         </button>
+        <h1 className="bar-title">{t("nav.settings")}</h1>
         <SettingsTransfer settings={settings} onImport={applyImported} />
-      </div>
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setStatus(t("common.saving"));
-          try {
-            await writeSettings(settings);
-            savedRef.current = settings;
-            // Only now, and only here. The interface has been following this dropdown
-            // since it changed, but until this line nothing was stored, and a cache
-            // written from the preview is what left readers with an interface in one
-            // language and this screen showing another.
-            rememberLocale(settings.nativeLanguage);
-            setStatus(t("common.saved"));
-          } catch (failure) {
-            setStatus(reason(failure));
-          }
-        }}
-      >
-        {/* First, and ahead of the slots below: the language pair is the setting
-            someone actually comes back to change, while a key mistyped once is
-            rarely touched again. */}
-        <fieldset>
-          <legend>{t("settings.languages")}</legend>
-          <label>
-            {t("settings.native")}
-            <LanguageSelect
-              value={settings.nativeLanguage}
-              onChange={(nativeLanguage) => {
-                // Only reachable with a real language: this select has no empty option.
-                if (!nativeLanguage) return;
-                edit({ nativeLanguage });
-                onLocale(nativeLanguage);
+      </header>
+
+      <main className="settings">
+        <Appearance />
+
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setStatus(t("common.saving"));
+            try {
+              await writeSettings(settings);
+              savedRef.current = settings;
+              // Only now, and only here. The interface has been following this dropdown
+              // since it changed, but until this line nothing was stored, and a cache
+              // written from the preview is what left readers with an interface in one
+              // language and this screen showing another.
+              rememberLocale(settings.nativeLanguage);
+              setStatus(t("common.saved"));
+            } catch (failure) {
+              setStatus(reason(failure));
+            }
+          }}
+        >
+          {/* First, and ahead of the slots below: the language pair is the setting
+              someone actually comes back to change, while a key mistyped once is
+              rarely touched again. */}
+          <fieldset>
+            <legend>{t("settings.languages")}</legend>
+            <label>
+              {t("settings.native")}
+              <LanguageSelect
+                value={settings.nativeLanguage}
+                onChange={(nativeLanguage) => {
+                  // Only reachable with a real language: this select has no empty option.
+                  if (!nativeLanguage) return;
+                  edit({ nativeLanguage });
+                  onLocale(nativeLanguage);
+                }}
+              />
+            </label>
+            {/* Optional, and empty by default: each import detects its own language, so
+                this is only worth setting to overrule a recording the model mishears. */}
+            <label>
+              {t("settings.studying")}
+              <LanguageSelect
+                value={settings.targetLanguage}
+                auto={t("settings.autoDetect")}
+                onChange={(targetLanguage) => edit({ targetLanguage })}
+              />
+            </label>
+          </fieldset>
+
+          <Slot
+            field="textModel"
+            legend={t("settings.textModel")}
+            modelHint="gpt-4o-mini"
+            slot={settings.textModel}
+            check={check?.textModel}
+            modelOptions={modelOptions.textModel}
+            modelsStatus={modelsStatus.textModel}
+            fetchingModels={fetchingModels === "textModel"}
+            onFetchModels={() => void fetchModels("textModel")}
+            onChange={(textModel) => edit({ textModel })}
+          />
+          <Slot
+            field="transcriptionModel"
+            legend={t("settings.transcriptionModel")}
+            modelHint="whisper-1"
+            slot={settings.transcriptionModel}
+            check={check?.transcriptionModel}
+            modelOptions={modelOptions.transcriptionModel}
+            modelsStatus={modelsStatus.transcriptionModel}
+            fetchingModels={fetchingModels === "transcriptionModel"}
+            onFetchModels={() => void fetchModels("transcriptionModel")}
+            onChange={(transcriptionModel) => edit({ transcriptionModel })}
+          />
+          <Proxy
+            proxy={settings.proxy}
+            check={proxyCheck}
+            onChange={(proxy) => edit({ proxy })}
+          />
+
+          <div className="actions">
+            <button type="submit" className="primary">
+              {t("common.save")}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={checking}
+              onClick={() => void test()}
+            >
+              {checking ? t("settings.testing") : t("settings.test")}
+            </button>
+            {status && <span className="notice">{status}</span>}
+            {/* No `t` and no key in the eight tables: it is a number, and it reads the
+                same in every language. Declared rather than imported for the reason in
+                vite.config.ts. */}
+            <span className="version">v{__VERSION__}</span>
+          </div>
+        </form>
+      </main>
+    </>
+  );
+}
+
+/** "Auto" gets the screen it defers to: there is no glyph for "whatever the system says". */
+const THEME_ICONS: Record<Theme, IconName> = {
+  auto: "display",
+  light: "sun",
+  dark: "moon",
+};
+
+/**
+ * How this device draws the app (ADR 0016). Outside the form, because nothing here
+ * waits for Save: a look is chosen by looking at it, so it applies — and is kept — the
+ * moment it is picked, and an armed Back has none of it to discard.
+ *
+ * Native radios under the cards, so arrow keys move between the choices and a screen
+ * reader announces a group of two and a group of three rather than five buttons.
+ */
+function Appearance() {
+  const t = useT();
+  const [look, setLook] = useState(storedLook);
+  const [theme, setTheme] = useState(storedTheme);
+  return (
+    <section className="group appearance" aria-labelledby="appearance-title">
+      <h2 id="appearance-title">{t("settings.appearance")}</h2>
+      <p className="hint">{t("settings.appearanceHint")}</p>
+
+      <fieldset className="looks">
+        <legend>{t("settings.look")}</legend>
+        {LOOKS.map((value) => (
+          <label key={value} className={`look-card look-${value}`}>
+            <input
+              type="radio"
+              name="look"
+              value={value}
+              checked={look === value}
+              onChange={() => {
+                applyLook(value);
+                setLook(value);
               }}
             />
+            {/* The look drawn small, in its own colours whichever look is in force —
+                a name alone does not say what either of them is. */}
+            <span className="preview" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+            <span className="look-name">{t(`look.${value}` as const)}</span>
+            <span className="look-hint">{t(`look.${value}Hint` as const)}</span>
           </label>
-          {/* Optional, and empty by default: each import detects its own language, so
-              this is only worth setting to overrule a recording the model mishears. */}
-          <label>
-            {t("settings.studying")}
-            <LanguageSelect
-              value={settings.targetLanguage}
-              auto={t("settings.autoDetect")}
-              onChange={(targetLanguage) => edit({ targetLanguage })}
+        ))}
+      </fieldset>
+
+      <fieldset className="seg themes">
+        <legend>{t("settings.colorMode")}</legend>
+        {THEMES.map((value) => (
+          <label key={value}>
+            <input
+              type="radio"
+              name="theme"
+              value={value}
+              checked={theme === value}
+              onChange={() => {
+                applyTheme(value);
+                setTheme(value);
+              }}
             />
+            <Icon name={THEME_ICONS[value]} />
+            <span>{t(`theme.${value}` as const)}</span>
           </label>
-        </fieldset>
-
-        <Slot
-          field="textModel"
-          legend={t("settings.textModel")}
-          modelHint="gpt-4o-mini"
-          slot={settings.textModel}
-          check={check?.textModel}
-          modelOptions={modelOptions.textModel}
-          modelsStatus={modelsStatus.textModel}
-          fetchingModels={fetchingModels === "textModel"}
-          onFetchModels={() => void fetchModels("textModel")}
-          onChange={(textModel) => edit({ textModel })}
-        />
-        <Slot
-          field="transcriptionModel"
-          legend={t("settings.transcriptionModel")}
-          modelHint="whisper-1"
-          slot={settings.transcriptionModel}
-          check={check?.transcriptionModel}
-          modelOptions={modelOptions.transcriptionModel}
-          modelsStatus={modelsStatus.transcriptionModel}
-          fetchingModels={fetchingModels === "transcriptionModel"}
-          onFetchModels={() => void fetchModels("transcriptionModel")}
-          onChange={(transcriptionModel) => edit({ transcriptionModel })}
-        />
-        <Proxy
-          proxy={settings.proxy}
-          check={proxyCheck}
-          onChange={(proxy) => edit({ proxy })}
-        />
-
-        <div className="actions">
-          <button type="submit">{t("common.save")}</button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={checking}
-            onClick={() => void test()}
-          >
-            {checking ? t("settings.testing") : t("settings.test")}
-          </button>
-          {status && <span className="notice">{status}</span>}
-          {/* No `t` and no key in the eight tables: it is a number, and it reads the
-              same in every language. Declared rather than imported for the reason in
-              vite.config.ts. */}
-          <span className="version">v{__VERSION__}</span>
-        </div>
-      </form>
-    </main>
+        ))}
+      </fieldset>
+    </section>
   );
 }
 
@@ -419,24 +528,26 @@ function SettingsTransfer({
 
   return (
     <div className="transfer">
-      <button type="button" className="ghost" onClick={() => void showExport()}>
+      {/* The words go before the icons on a narrow screen, not the other way round:
+          they stay the buttons' accessible names either way. */}
+      <button type="button" className="ghost small" onClick={() => void showExport()}>
         <Icon name="download" />
-        {t("settings.exportSettings")}
+        <span className="label">{t("settings.exportSettings")}</span>
       </button>
       <button
         type="button"
-        className="ghost"
+        className="ghost small"
         onClick={() => {
           setProblem(null);
           importRef.current?.showModal();
         }}
       >
         <Icon name="upload" />
-        {t("settings.importSettings")}
+        <span className="label">{t("settings.importSettings")}</span>
       </button>
 
-      <dialog ref={exportRef} className="ask-dialog transfer-dialog">
-        <p className="text">{t("settings.exportTitle")}</p>
+      <dialog ref={exportRef} className="sheet transfer-sheet">
+        <p className="sheet-title">{t("settings.exportTitle")}</p>
         {/* Ahead of the string, not under it: it says what the string is for, and
             that is worth reading before the eye lands on 500 characters of base64. */}
         <p className="note">{t("settings.exportWarning")}</p>
@@ -450,18 +561,22 @@ function SettingsTransfer({
           onFocus={(event) => event.currentTarget.select()}
         />
         <div className="actions">
-          <button type="button" onClick={() => void copy()}>
+          <button type="button" className="primary" onClick={() => void copy()}>
             {t("settings.copy")}
           </button>
-          <button type="button" className="ghost" onClick={() => exportRef.current?.close()}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => exportRef.current?.close()}
+          >
             {t("common.close")}
           </button>
           {copyStatus && <span className="notice">{copyStatus}</span>}
         </div>
       </dialog>
 
-      <dialog ref={importRef} className="ask-dialog transfer-dialog">
-        <p className="text">{t("settings.importTitle")}</p>
+      <dialog ref={importRef} className="sheet transfer-sheet">
+        <p className="sheet-title">{t("settings.importTitle")}</p>
         <textarea
           className="cipher"
           value={pasted}
@@ -475,10 +590,19 @@ function SettingsTransfer({
         />
         {problem && <p className="error">{problem}</p>}
         <div className="actions">
-          <button type="button" disabled={!pasted.trim()} onClick={() => void apply()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={!pasted.trim()}
+            onClick={() => void apply()}
+          >
             {t("settings.importApply")}
           </button>
-          <button type="button" className="ghost" onClick={() => importRef.current?.close()}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => importRef.current?.close()}
+          >
             {t("common.close")}
           </button>
         </div>
@@ -516,7 +640,7 @@ function SecretInput({
       />
       <button
         type="button"
-        className="ghost"
+        className="ghost icon-only"
         onClick={() => setShown(!shown)}
         aria-label={t(shown ? "settings.hide" : "settings.show")}
       >
@@ -622,7 +746,7 @@ function Slot({
           />
           <button
             type="button"
-            className="ghost"
+            className="secondary"
             disabled={fetchingModels}
             onClick={onFetchModels}
           >

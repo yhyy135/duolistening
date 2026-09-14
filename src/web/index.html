@@ -8,9 +8,11 @@
     <!-- The dark one comes first on purpose. The browser takes the first theme-color
          whose media matches, and a theme-color with no media matches everything — so
          in the other order the dark one is unreachable and every phone gets a pale
-         status bar over a dark app. Both values are --bg from styles.css. -->
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12141a" />
-    <meta name="theme-color" content="#f4f5f8" />
+         status bar over a dark app. Both values are the Standard look's --ground from
+         styles.css, and they are only the first paint's: appearance.ts rewrites them
+         to whatever ground is really showing once the bundle has loaded. -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d10" />
+    <meta name="theme-color" content="#ffffff" />
 
     <!-- Absolute here, relative inside the manifest, and both halves are deliberate.
          Vite rewrites a leading-slash href in this file through `base`, the same way
@@ -25,11 +27,15 @@
     <script>
       // Before first paint, because React's effect runs after it: a dark flash on
       // every load is precisely what someone who chose light mode is trying to
-      // avoid. localStorage throws in some privacy modes, hence the catch.
+      // avoid, and a Standard page repainting itself as Station a moment later is
+      // the same flash in another shape. localStorage throws in some privacy modes,
+      // hence the catch. The keys and values are appearance.ts's.
       try {
         const chosen = localStorage.getItem("duolistening.theme");
         if (chosen === "light" || chosen === "dark")
           document.documentElement.dataset.theme = chosen;
+        if (localStorage.getItem("duolistening.look") === "station")
+          document.documentElement.dataset.look = "station";
       } catch {}
     </script>
   </head>

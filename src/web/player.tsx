@@ -1,10 +1,16 @@
 // The lyrics view: an <audio> element, a Transcript that follows it, and the ask-AI
 // popup. Everything about "which Line is playing" comes from shared/locate.ts, which
 // is pure and already tested — this file only turns its answer into DOM.
+//
+// One DOM for both looks (ADR 0016). Standard lays it out as a lyric page with the cover
+// beside it, Station as a timetable; the markup carries what either of them needs —
+// each Line's start time, the stops either side of the current one, a tick per Line
+// along the band — and the stylesheet alone decides which of it is shown.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { StringKey } from "../shared/i18n.ts";
 import {
   JAPANESE,
   type Line,
@@ -16,6 +22,7 @@ import {
 } from "../shared/model.ts";
 import { type Position, locate, sweepState, tokenWords, wordSlices } from "../shared/locate.ts";
 import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
+import { Cover, LineBadge } from "./cover.tsx";
 import { Icon } from "./icons.tsx";
 import { isImporting, retryImport, type ImportProgress } from "./import.ts";
 import { buildAnnotator, buildImportDeps, japaneseTokenizer } from "./pipeline.ts";
@@ -29,7 +36,7 @@ import {
   savePosition,
   saveTranscript,
 } from "./store.ts";
-import { useT } from "./i18n.ts";
+import { useLanguageName, useT } from "./i18n.ts";
 import { createTextModel } from "./text-model.ts";
 
 /** What the screen plays: the shelf entry, its Lines, and something `<audio>` accepts. */
@@ -51,9 +58,40 @@ const reason = (failure: unknown) =>
 const formatTime = (seconds: number) =>
   new Date(Math.max(0, seconds) * 1000).toISOString().slice(seconds >= 3600 ? 11 : 14, 19);
 
-/** The stops worth one click. Slow first: this is a listening tool, not a podcast app. */
-const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+/**
+ * The speeds on offer: finely stepped at the slow end, because this is a listening tool
+ * and 0.85× is a real choice there, and coarse at the fast end, where nobody studies.
+ */
+const RATES = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 1, 1.1, 1.2, 1.25, 1.5, 1.75, 2];
 const RATE_KEY = "duolistening.rate";
+
+/** A rate kept from the old 0.05-step slider can fall between two stops; it stays on offer. */
+const rateChoices = (rate: number) =>
+  RATES.includes(rate) ? RATES : [...RATES, rate].sort((a, b) => a - b);
+
+/** "1.0×" and "0.85×" — one decimal where one says it, never "1.10×". */
+const formatRate = (rate: number) =>
+  `${rate.toFixed(Math.round(rate * 100) % 10 === 0 ? 1 : 2)}×`;
+
+/**
+ * What the Lines show. `none` is listening blind: every Line is blurred until it is
+ * chosen, and choosing one replays it and shows it — listen first, then check.
+ */
+const MODES = ["both", "text", "none"] as const;
+type SubtitleMode = (typeof MODES)[number];
+const MODE_KEY = "duolistening.subtitles";
+const MODE_LABELS: Record<SubtitleMode, StringKey> = {
+  both: "player.showBoth",
+  text: "player.showText",
+  none: "player.showNone",
+};
+
+/**
+ * A tick per Line along the Station look's band, up to this many. Past it the ticks sit
+ * closer together than a pixel on a phone and stop saying where anything is — an
+ * 828-Line episode would draw a grey bar the hard way.
+ */
+const MAX_TICKS = 150;
 
 /** Native list-scrolling keys. Arrow-left/right are deliberately not here: those are
     the app's own line shortcuts below, and a jump they cause should still be followed. */
@@ -67,6 +105,26 @@ function storedRate(): number {
   return stored >= 0.5 && stored <= 2 ? stored : 1;
 }
 
+/** So is how much of the Transcript someone wants to see while they listen. */
+function storedMode(): SubtitleMode {
+  try {
+    const stored = localStorage.getItem(MODE_KEY);
+    return MODES.includes(stored as SubtitleMode) ? (stored as SubtitleMode) : "both";
+  } catch {
+    return "both";
+  }
+}
+
+/**
+ * How much of the bar lies behind the playhead, as a custom property the track's
+ * gradient reads. A range input has no filled half of its own in WebKit, and a second
+ * element laid over it would be one more thing to keep in step with the thumb.
+ */
+function paintPlayed(input: HTMLInputElement) {
+  const max = Number(input.max) || 1;
+  input.style.setProperty("--played", `${Math.min(100, (Number(input.value) / max) * 100)}%`);
+}
+
 export function PlayerScreen({ id }: { id: string }) {
   const [data, setData] = useState<PlayableResource | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -74,7 +132,11 @@ export function PlayerScreen({ id }: { id: string }) {
   const [position, setPosition] = useState<Position>(NOWHERE);
   const [asking, setAsking] = useState<string | null>(null);
   const t = useT();
+  const languageOf = useLanguageName();
   const [rate, setRate] = useState(storedRate);
+  const [mode, setMode] = useState(storedMode);
+  /** Lines chosen while the mode is `none` — the ones shown despite it. */
+  const [revealed, setRevealed] = useState<ReadonlySet<number>>(() => new Set());
   // On by default; a user scroll turns it off and it stays off, no timer. The only
   // way back is the floating control, once the reader wants to be found again.
   const [following, setFollowing] = useState(true);
@@ -115,15 +177,17 @@ export function PlayerScreen({ id }: { id: string }) {
       remainingRef.current.textContent = total
         ? `-${formatTime(total - audio.currentTime)}`
         : "";
-    if (scrubRef.current && !scrubbing.current)
+    if (scrubRef.current && !scrubbing.current) {
       scrubRef.current.value = String(audio.currentTime);
+      paintPlayed(scrubRef.current);
+    }
   };
 
   /**
    * Playback moved by whole Lines, which is the unit this app is about — not by ±15
-   * seconds, the way a podcast app would. The arrow keys, the transport's two side
-   * buttons and the lock screen's track buttons are three ways into this one
-   * function; a `delta` of 0 replays the Line being listened to.
+   * seconds, the way a podcast app would. The arrow keys, the transport's buttons and
+   * the lock screen's track buttons are three ways into this one function; a `delta`
+   * of 0 replays the Line being listened to.
    */
   const jump = (delta: number) => {
     const audio = audioRef.current;
@@ -184,7 +248,7 @@ export function PlayerScreen({ id }: { id: string }) {
   // not be torn down and rebuilt each time the toggle is clicked.
   const loopRef = useRef(false);
   // The Line eligible to loop — always whichever one `sample` last landed on, so
-  // turning the toggle on mid-line loops whatever is already playing. `seek` and
+  // turning the toggle on mid-line loops whatever is already playing. `seekLine` and
   // `jump` also set this the instant they fire: without that, clicking a later Line
   // while looping would still find the old Line here, see the new time already past
   // its endSec, and yank playback straight back to the Line just left.
@@ -292,6 +356,17 @@ export function PlayerScreen({ id }: { id: string }) {
     if (audioRef.current) audioRef.current.playbackRate = rate;
     localStorage.setItem(RATE_KEY, String(rate));
   }, [rate, data]);
+
+  // The mode outlives the page, and changing it hides every Line again: what was
+  // revealed was revealed for the mode being left.
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {
+      // Private mode. The choice holds for this visit, which is all it owes.
+    }
+    setRevealed(new Set());
+  }, [mode]);
 
   // Mirrors `loop` for the sampler effect below, which reads it every frame and must
   // not be torn down and rebuilt each time the toggle is clicked.
@@ -420,6 +495,7 @@ export function PlayerScreen({ id }: { id: string }) {
   useEffect(() => {
     asked.current = new Set();
     setAnnotationError(null);
+    setRevealed(new Set());
   }, [id]);
 
   /**
@@ -573,6 +649,13 @@ export function PlayerScreen({ id }: { id: string }) {
           event.preventDefault();
           setLoop((was) => !was);
           return;
+        // Both, the original alone, and blind, in that order — the order a listener
+        // takes them in when they are working a passage down to nothing.
+        case "t":
+        case "T":
+          event.preventDefault();
+          setMode((was) => MODES[(MODES.indexOf(was) + 1) % MODES.length]!);
+          return;
       }
     };
 
@@ -602,8 +685,13 @@ export function PlayerScreen({ id }: { id: string }) {
     const resource = data?.resource;
     if (!resource || !("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
+    // The show where an album would go, and its cover on the lock screen.
     if (typeof MediaMetadata === "function")
-      session.metadata = new MediaMetadata({ title: resource.title });
+      session.metadata = new MediaMetadata({
+        title: resource.title,
+        ...(resource.showTitle && { artist: resource.showTitle }),
+        ...(resource.artworkUrl && { artwork: [{ src: resource.artworkUrl }] }),
+      });
     session.playbackState = playing ? "playing" : "paused";
 
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
@@ -628,8 +716,53 @@ export function PlayerScreen({ id }: { id: string }) {
     };
   }, [data, playing]);
 
-  if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="notice">{t("common.loading")}</p>;
+  /**
+   * A Line chosen from the list: play from its start, and show it if Lines are hidden.
+   * Bound once, and handed the Line back by the row, so that the rows can be memoised —
+   * see LineRow.
+   */
+  const seekLine = useCallback((line: Line, index: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    loopLine.current = line;
+    audio.currentTime = line.startSec;
+    void audio.play();
+    setRevealed((was) => (was.has(index) ? was : new Set(was).add(index)));
+  }, []);
+
+  const askLine = useCallback((line: Line) => {
+    // Reading a line's grammar and listening to the next one at once is not the point
+    // of this dialog.
+    audioRef.current?.pause();
+    setAsking(line.text);
+  }, []);
+
+  /**
+   * The Station look's tick per Line, placed by start time along the band. Built once
+   * per Transcript rather than per frame, and not at all where there would be too many
+   * to mean anything.
+   */
+  const span = duration || data?.resource.durationSec || 0;
+  const ticks = useMemo(() => {
+    const lines = data?.transcript;
+    if (!lines?.length || lines.length > MAX_TICKS || !span) return null;
+    return lines.map((line, index) => (
+      <i key={index} style={{ left: `${Math.min(100, (line.startSec / span) * 100)}%` }} />
+    ));
+  }, [data?.transcript, span]);
+
+  if (error)
+    return (
+      <PlayerStub>
+        <p className="error">{error}</p>
+      </PlayerStub>
+    );
+  if (!data)
+    return (
+      <PlayerStub>
+        <p className="notice">{t("common.loading")}</p>
+      </PlayerStub>
+    );
 
   const { resource, transcript, audioUrl } = data;
   // Nothing is importing this episode any more, so an offer to transcribe it is real
@@ -641,270 +774,447 @@ export function PlayerScreen({ id }: { id: string }) {
     (resource.phase === "untranscribed" || resource.phase === "failed") &&
     !isImporting(resource.id);
   const canTranscribe = slotConfigured(settings?.transcriptionModel);
-  const seek = (line: Line) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    loopLine.current = line;
-    audio.currentTime = line.startSec;
-    void audio.play();
-  };
+
+  const here = position.lineIndex;
+  const total = transcript.length;
+  const previous = transcript[here - 1];
+  const upcoming = transcript[here + 1];
+  const name = resource.showTitle ?? resource.title;
+  const pair = `${
+    resource.targetLanguage ? languageOf(resource.targetLanguage) : t("library.autoLanguage")
+  } → ${languageOf(resource.nativeLanguage)}`;
+  // Before the first Line starts the first one is next, so it is the one counted.
+  const counter = total ? t("player.lineOf", { n: Math.max(1, here + 1), total }) : "";
+  // The Lines are in the studied language and the translations in the reader's own,
+  // and saying so is not pedantry: a Han character is drawn differently in Japanese
+  // and in Chinese, and without it a Chinese interface sets every kanji of a Japanese
+  // Transcript in its Chinese form.
+  const textLang =
+    resource.targetLanguage ?? (wantsJapanese(transcript) ? JAPANESE : undefined);
 
   return (
-    <main className="player">
-      {translating && <p className="notice">{t("player.translating")}</p>}
-      {/* Beside the lyrics rather than instead of them: a rate-limited translation, or
-          a dictionary that would not load, leaves an episode that still plays and
-          still has its Lines. */}
-      {annotationError && <p className="error">{annotationError}</p>}
-
-      {/* No `controls`. The native widget is three different shapes in three engines,
-          none of them in this palette, and the one control this screen is about —
-          move by a Line — is in none of them. What is left is the decoder, which is
-          all this element was ever wanted for. */}
-      <audio
-        ref={audioRef}
-        src={audioUrl}
-        preload="metadata"
-        onLoadedMetadata={(event) => {
-          event.currentTarget.playbackRate = rate;
-          const resume = resource.lastPositionSec ?? 0;
-          if (resume > 0) event.currentTarget.currentTime = resume;
-        }}
-      />
-
-      <section className="now-playing">
-        <h1>{resource.title}</h1>
-
-        <div className="scrub">
-          {/* `defaultValue`, and the frame loop writes `value` on the DOM node from
-              there on — see paintTransport. A controlled input would put the playhead
-              in React state and re-render every Line sixty times a second. */}
-          <input
-            ref={scrubRef}
-            type="range"
-            min={0}
-            max={duration || resource.durationSec || 1}
-            step="any"
-            defaultValue={resource.lastPositionSec ?? 0}
-            aria-label={t("player.position")}
-            onPointerDown={() => (scrubbing.current = true)}
-            onPointerUp={() => (scrubbing.current = false)}
-            onPointerCancel={() => (scrubbing.current = false)}
-            onInput={(event) => {
-              const audio = audioRef.current;
-              if (audio) audio.currentTime = Number(event.currentTarget.value);
-            }}
-          />
-          <p className="times">
-            <span ref={elapsedRef}>{formatTime(resource.lastPositionSec ?? 0)}</span>
-            <span ref={remainingRef} />
-          </p>
+    <>
+      <header className="topbar player-bar">
+        {/* A link home rather than history.back(): a deep link opens this screen with
+            nothing behind it, and an installed app has no browser Back to fall on. */}
+        <a href="#/" className="back">
+          <Icon name="chevron-left" />
+          <span>{t("nav.library")}</span>
+        </a>
+        <Cover src={resource.artworkUrl} name={name} />
+        <LineBadge resource={resource} />
+        <div className="bar-title">
+          <h1>{resource.title}</h1>
+          <small>
+            {[resource.showTitle, formatTime(duration || resource.durationSec), pair]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
         </div>
+        <a
+          href="#/settings"
+          className="icon-button"
+          aria-label={t("nav.settings")}
+          title={t("nav.settings")}
+        >
+          <Icon name="gear" />
+        </a>
+      </header>
 
-        <div className="controls">
-          <button
-            type="button"
-            className="step"
-            aria-label={t("player.previousLine")}
-            onClick={() => jump(-1)}
-          >
-            <Icon name="skip-prev" />
-          </button>
-          <button
-            type="button"
-            className="play"
-            aria-label={playing ? t("player.pause") : t("player.play")}
-            onClick={toggle}
-          >
-            <Icon name={playing ? "pause" : "play"} size={1.4} />
-          </button>
-          <button
-            type="button"
-            className="step"
-            aria-label={t("player.nextLine")}
-            onClick={() => jump(1)}
-          >
-            <Icon name="skip-next" />
-          </button>
-          {/* Drilling one hard sentence: hold the current Line until this goes off
-              again, or a different Line becomes current — see the sampler above. It
-              sits in the transport rather than below it because that is where a
-              listener looks for it, and because a row of its own was costing three
-              lines of lyrics on a phone. */}
-          <button
-            type="button"
-            className={`step loop ${loop ? "on" : ""}`}
-            aria-pressed={loop}
-            aria-label={t("player.repeat")}
-            title={t("player.repeatTitle")}
-            onClick={() => setLoop(!loop)}
-          >
-            <Icon name="repeat-one" />
-          </button>
-        </div>
+      <main className="player" data-subtitles={mode}>
+        {resource.artworkUrl && (
+          <Backdrop key={resource.artworkUrl} src={resource.artworkUrl} />
+        )}
 
-        <Transport rate={rate} onRate={setRate} />
-      </section>
+        {/* No `controls`. The native widget is three different shapes in three engines,
+            none of them in this palette, and the one control this screen is about —
+            move by a Line — is in none of them. What is left is the decoder, which is
+            all this element was ever wanted for. */}
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          onLoadedMetadata={(event) => {
+            event.currentTarget.playbackRate = rate;
+            const resume = resource.lastPositionSec ?? 0;
+            if (resume > 0) event.currentTarget.currentTime = resume;
+          }}
+        />
 
-      {transcript.length === 0 ? (
-        // Where the lyrics would be, rather than a line of grey text above an empty
-        // screen: this is the whole of what the reader came here for, and its absence
-        // has one specific cause and one specific fix.
-        <div className="lyrics-wrap">
-          <div className="locked">
-            <Icon name="gear" size={2} />
-            {retrying ? (
-              <p>
-                {t(`phase.${retrying.phase}`)}
-                {retrying.progress !== undefined && ` ${Math.round(retrying.progress * 100)}%`}
-              </p>
-            ) : !resting ? (
-              // Something is importing this episode in another tab, and the poll above
-              // is watching for its Lines. Offering to run it a second time is not help.
-              <p>{t("player.noTranscript")}</p>
-            ) : canTranscribe ? (
-              <>
-                <p>{retryError ?? resource.failureReason ?? t("player.noTranscript")}</p>
-                <button type="button" onClick={() => void retryTranscription()}>
-                  {t("player.retryTranscription")}
-                </button>
-              </>
-            ) : (
-              <>
-                <p>{t("player.needsTranscription")}</p>
-                <a href="#/settings">{t("nav.settings")}</a>
-              </>
-            )}
+        {/* The controls come before the Lines in the document, wherever they are drawn:
+            a keyboard reaches the transport in a few presses instead of after tabbing
+            through every Line of an episode. */}
+        <aside className="side">
+          <div className="episode" aria-hidden="true">
+            <Cover src={resource.artworkUrl} name={name} />
+            <p className="episode-title">{resource.title}</p>
+            <p className="episode-meta">
+              {[resource.showTitle, pair].filter(Boolean).join(" · ")}
+            </p>
           </div>
-        </div>
-      ) : (
-        <div className="lyrics-wrap">
-          <ol
-            className="lyrics"
-            ref={listRef}
-            onWheel={() => setFollowing(false)}
-            onTouchMove={() => setFollowing(false)}
-            onKeyDown={(event) => {
-              if (SCROLL_KEYS.has(event.key)) setFollowing(false);
-            }}
-          >
-            {transcript.map((line, index) => (
-              <LineRow
-                key={index}
-                line={line}
-                current={index === position.lineIndex}
-                looping={loop && index === position.lineIndex}
-                wordIndex={index === position.lineIndex ? position.wordIndex : null}
-                onSeek={() => seek(line)}
-                onAsk={() => {
-                  // Reading a line's grammar and listening to the next one at once
-                  // is not the point of this dialog.
-                  audioRef.current?.pause();
-                  setAsking(line.text);
+
+          <div className="dock">
+            {/* The Station look's status strip. Hidden from assistive technology: every
+                state on it is also the pressed state of a control below. */}
+            <p className="ticker" aria-hidden="true">
+              <span>{playing ? t("player.playing") : t("player.paused")}</span>
+              <span>{counter}</span>
+              <span className={loop ? undefined : "off"}>
+                {t("player.repeat")} {loop ? t("common.on") : t("common.off")}
+              </span>
+              <span className={mode === "both" ? "off" : undefined}>
+                {t("player.subtitles")} {t(MODE_LABELS[mode])}
+              </span>
+              {translating && <span>{t("player.translating")}</span>}
+            </p>
+
+            <p className="ends" aria-hidden="true">
+              <span className="end">
+                {previous && (
+                  <>
+                    <b>{t("player.previousLine")}</b>{" "}
+                    <span lang={textLang}>{previous.text}</span>
+                  </>
+                )}
+              </span>
+              <span className="end">
+                {upcoming && (
+                  <>
+                    <span lang={textLang}>{upcoming.text}</span> <b>{t("player.nextLine")}</b>
+                  </>
+                )}
+              </span>
+            </p>
+
+            <div className="scrub">
+              {ticks && (
+                <span className="ticks" aria-hidden="true">
+                  {ticks}
+                </span>
+              )}
+              {/* `defaultValue`, and the frame loop writes `value` on the DOM node from
+                  there on — see paintTransport. A controlled input would put the
+                  playhead in React state and re-render every Line sixty times a second. */}
+              <input
+                ref={scrubRef}
+                type="range"
+                min={0}
+                max={duration || resource.durationSec || 1}
+                step="any"
+                defaultValue={resource.lastPositionSec ?? 0}
+                aria-label={t("player.position")}
+                onPointerDown={() => (scrubbing.current = true)}
+                onPointerUp={() => (scrubbing.current = false)}
+                onPointerCancel={() => (scrubbing.current = false)}
+                onInput={(event) => {
+                  const audio = audioRef.current;
+                  if (audio) audio.currentTime = Number(event.currentTarget.value);
+                  paintPlayed(event.currentTarget);
                 }}
               />
-            ))}
-          </ol>
-          {!following && position.lineIndex >= 0 && (
-            <button
-              type="button"
-              className="jump-to-current"
-              onClick={() => setFollowing(true)}
-            >
-              {t("player.jumpToCurrent")}
-            </button>
+            </div>
+            <p className="times">
+              <span ref={elapsedRef}>{formatTime(resource.lastPositionSec ?? 0)}</span>
+              <span className="counter">{counter}</span>
+              <span ref={remainingRef} />
+            </p>
+
+            <div className="controls">
+              <div className="transport">
+                <button
+                  type="button"
+                  className="step labeled"
+                  title={t("player.replay")}
+                  onClick={() => jump(0)}
+                >
+                  <Icon name="replay" />
+                  <span className="label">{t("player.replayShort")}</span>
+                </button>
+                <button
+                  type="button"
+                  className="step"
+                  aria-label={t("player.previousLine")}
+                  onClick={() => jump(-1)}
+                >
+                  <Icon name="skip-prev" />
+                </button>
+                <button
+                  type="button"
+                  className="play"
+                  aria-label={playing ? t("player.pause") : t("player.play")}
+                  onClick={toggle}
+                >
+                  <Icon name={playing ? "pause" : "play"} size={1.4} />
+                </button>
+                <button
+                  type="button"
+                  className="step"
+                  aria-label={t("player.nextLine")}
+                  onClick={() => jump(1)}
+                >
+                  <Icon name="skip-next" />
+                </button>
+                {/* Drilling one hard sentence: hold the current Line until this goes off
+                    again, or a different Line becomes current — see the sampler above. */}
+                <button
+                  type="button"
+                  className={loop ? "step labeled loop on" : "step labeled loop"}
+                  aria-pressed={loop}
+                  title={t("player.repeatTitle")}
+                  onClick={() => setLoop(!loop)}
+                >
+                  <Icon name="repeat-one" />
+                  <span className="label">{t("player.repeat")}</span>
+                </button>
+              </div>
+
+              <fieldset className="seg modes">
+                <legend className="visually-hidden">{t("player.subtitles")}</legend>
+                {MODES.map((value) => (
+                  <label key={value}>
+                    <input
+                      type="radio"
+                      name="subtitles"
+                      value={value}
+                      checked={mode === value}
+                      onChange={() => setMode(value)}
+                    />
+                    <span>{t(MODE_LABELS[value])}</span>
+                  </label>
+                ))}
+              </fieldset>
+
+              {/* A native select, where six buttons and a slider used to be: it is one
+                  control's width in the dock, it opens the system's own picker on a
+                  phone, and a keyboard already knows how to drive it. */}
+              <label className="rate">
+                <span className="visually-hidden">{t("player.speed")}</span>
+                <select
+                  value={String(rate)}
+                  onChange={(event) => setRate(Number(event.target.value))}
+                >
+                  {rateChoices(rate).map((value) => (
+                    <option key={value} value={String(value)}>
+                      {formatRate(value)}
+                    </option>
+                  ))}
+                </select>
+                <Icon name="chevron-down" size={0.85} />
+              </label>
+            </div>
+
+            <p className="shortcuts">
+              <span>
+                <kbd>Space</kbd> {t("player.keyPlay")}
+              </span>
+              <span>
+                <kbd>←</kbd>
+                <kbd>→</kbd> {t("player.keyLine")}
+              </span>
+              <span>
+                <kbd>R</kbd> {t("player.keyReplay")}
+              </span>
+              <span>
+                <kbd>L</kbd> {t("player.keyLoop")}
+              </span>
+              <span>
+                <kbd>T</kbd> {t("player.keySubtitles")}
+              </span>
+            </p>
+          </div>
+        </aside>
+
+        <div className="lyrics-wrap">
+          {/* Floating, not in the flow: a window lands every few seconds while this is
+              up, and a line of text appearing and going above the Lines would push
+              the one being read up and down with it. */}
+          {translating && <p className="translating">{t("player.translating")}</p>}
+
+          {transcript.length === 0 ? (
+            // Where the lyrics would be, rather than a line of grey text above an empty
+            // screen: this is the whole of what the reader came here for, and its
+            // absence has one specific cause and one specific fix.
+            <div className="locked">
+              <Icon name="subtitles" size={2} />
+              {retrying ? (
+                <p>
+                  {t(`phase.${retrying.phase}`)}
+                  {retrying.progress !== undefined &&
+                    ` ${Math.round(retrying.progress * 100)}%`}
+                </p>
+              ) : !resting ? (
+                // Something is importing this episode in another tab, and the poll
+                // above is watching for its Lines. Offering to run it a second time is
+                // not help.
+                <p>{t("player.noTranscript")}</p>
+              ) : canTranscribe ? (
+                <>
+                  <p>{retryError ?? resource.failureReason ?? t("player.noTranscript")}</p>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => void retryTranscription()}
+                  >
+                    {t("player.retryTranscription")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p>{t("player.needsTranscription")}</p>
+                  <a href="#/settings" className="button primary">
+                    {t("nav.settings")}
+                  </a>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Beside the lyrics rather than instead of them: a rate-limited
+                  translation, or a dictionary that would not load, leaves an episode
+                  that still plays and still has its Lines. */}
+              {(annotationError || mode === "none") && (
+                <div className="notices">
+                  {annotationError && <p className="error">{annotationError}</p>}
+                  {mode === "none" && <p className="notice">{t("player.revealHint")}</p>}
+                </div>
+              )}
+              <ol
+                className="lyrics"
+                ref={listRef}
+                onWheel={() => setFollowing(false)}
+                onTouchMove={() => setFollowing(false)}
+                onKeyDown={(event) => {
+                  if (SCROLL_KEYS.has(event.key)) setFollowing(false);
+                }}
+              >
+                {transcript.map((line, index) => (
+                  <LineRow
+                    key={index}
+                    line={line}
+                    index={index}
+                    state={
+                      index === here
+                        ? "current"
+                        : index < here
+                          ? "passed"
+                          : index === here + 1
+                            ? "next"
+                            : ""
+                    }
+                    looping={loop && index === here}
+                    wordIndex={index === here ? position.wordIndex : null}
+                    lang={textLang}
+                    translationLang={resource.nativeLanguage}
+                    // Only the hidden mode reads this, so no other mode re-renders a row
+                    // for having been chosen once.
+                    revealed={mode === "none" && revealed.has(index)}
+                    onSeek={seekLine}
+                    onAsk={askLine}
+                  />
+                ))}
+              </ol>
+              {!following && here >= 0 && (
+                <button
+                  type="button"
+                  className="jump-to-current"
+                  onClick={() => setFollowing(true)}
+                >
+                  {t("player.jumpToCurrent")}
+                </button>
+              )}
+            </>
           )}
         </div>
-      )}
 
-      <AskDialog text={asking} onClose={() => setAsking(null)} />
-    </main>
+        <AskDialog text={asking} onClose={() => setAsking(null)} />
+      </main>
+    </>
+  );
+}
+
+/** Before there is an episode to show, or when there is none to show: still a way back. */
+function PlayerStub({ children }: { children: ReactNode }) {
+  const t = useT();
+  return (
+    <>
+      <header className="topbar player-bar">
+        <a href="#/" className="back">
+          <Icon name="chevron-left" />
+          <span>{t("nav.library")}</span>
+        </a>
+      </header>
+      <main className="player-stub">{children}</main>
+    </>
   );
 }
 
 /**
- * Speed, pulled out of the native controls where only Chrome exposes it and only
- * through a context menu. Six stops one click away, and a slider for everything
- * between them — the stops are also the slider's tick marks, so the two controls
- * are visibly the same scale rather than two ways to set the same number.
+ * The cover, blurred past recognition and laid under the whole player — a lyric page
+ * taking its colour from the show, the way a music app takes it from the album. Only the
+ * Standard look draws it, and a cover that will not load takes the wash with it rather
+ * than leaving a broken image under the Lines.
  */
-function Transport({ rate, onRate }: { rate: number; onRate: (rate: number) => void }) {
-  const t = useT();
+function Backdrop({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
   return (
-    <div className="transport">
-      <div className="rates">
-        {RATES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={value === rate ? "on" : ""}
-            aria-pressed={value === rate}
-            onClick={() => onRate(value)}
-          >
-            {value}×
-          </button>
-        ))}
-      </div>
-
-      <label className="custom">
-        <span className="visually-hidden">{t("player.speed")}</span>
-        <input
-          type="range"
-          min="0.5"
-          max="2"
-          step="0.05"
-          list="rate-stops"
-          value={rate}
-          onChange={(event) => onRate(Number(event.target.value))}
-        />
-        <datalist id="rate-stops">
-          {RATES.map((value) => (
-            <option key={value} value={value} />
-          ))}
-        </datalist>
-        {rate.toFixed(2)}×
-      </label>
-
-      <p className="shortcuts">
-        <kbd>Space</kbd> {t("player.keyPlay")}
-        <span className="gap" />
-        <kbd>←</kbd>
-        <kbd>→</kbd> {t("player.keyLine")}
-        <span className="gap" />
-        <kbd>R</kbd> {t("player.keyReplay")}
-        <span className="gap" />
-        <kbd>L</kbd> {t("player.keyLoop")}
-      </p>
+    <div className="backdrop" aria-hidden="true">
+      <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
     </div>
   );
 }
 
-function LineRow({
+/** Where a Line stands relative to the one being spoken, as its class. */
+type LineState = "passed" | "current" | "next" | "";
+
+/**
+ * One Line. Memoised, and every prop is either stable or specific to this row, so a
+ * Word moving on re-renders the Line being spoken rather than the eight hundred around
+ * it: the two callbacks are the screen's, bound once, and are handed the Line back.
+ */
+const LineRow = memo(function LineRow({
   line,
-  current,
+  index,
+  state,
   looping,
   wordIndex,
+  revealed,
+  lang,
+  translationLang,
   onSeek,
   onAsk,
 }: {
   line: Line;
-  current: boolean;
+  index: number;
+  state: LineState;
   looping: boolean;
   wordIndex: number | null;
-  onSeek: () => void;
-  onAsk: () => void;
+  revealed: boolean;
+  /** The studied language when it is known, and the reader's own. */
+  lang: string | undefined;
+  translationLang: string;
+  onSeek: (line: Line, index: number) => void;
+  onAsk: (line: Line) => void;
 }) {
   const t = useT();
+  const classes = [state, looping && "looping", revealed && "revealed"].filter(Boolean);
   return (
-    <li className={current ? (looping ? "current looping" : "current") : ""}>
+    <li className={classes.length ? classes.join(" ") : undefined}>
       {/* A <button>, not an <li onClick> — Tab, Enter, the focus ring and the screen
           reader all come free, and the ask button beside it stops being a click that
           has to be swallowed before it reaches the Line underneath. */}
-      <button type="button" className="seek" onClick={onSeek}>
-        <span className="text">
-          <LineText line={line} current={current} wordIndex={wordIndex} />
+      <button type="button" className="seek" onClick={() => onSeek(line, index)}>
+        <span className="stamp">{formatTime(line.startSec)}</span>
+        <span className="words">
+          <span className="text" lang={lang}>
+            <LineText line={line} current={state === "current"} wordIndex={wordIndex} />
+          </span>
+          {line.translation && (
+            <span className="translation" lang={translationLang}>
+              {line.translation}
+            </span>
+          )}
         </span>
-        {line.translation && <span className="translation">{line.translation}</span>}
       </button>
       {/* An icon and a real accessible name, where a bare "?" announced as "question
           mark" and read as a help button rather than an offer to explain the Line. */}
@@ -913,13 +1223,13 @@ function LineRow({
         className="ask"
         aria-label={t("player.askTitle")}
         title={t("player.askTitle")}
-        onClick={onAsk}
+        onClick={() => onAsk(line)}
       >
         <Icon name="wand-sparkle" size={1} />
       </button>
     </li>
   );
-}
+});
 
 /**
  * Three renderings of one Line, in priority order:
@@ -1032,8 +1342,8 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
   }, [text, t]);
 
   return (
-    <dialog ref={dialogRef} className="ask-dialog" onClose={onClose}>
-      <p className="text">{text}</p>
+    <dialog ref={dialogRef} className="sheet ask-sheet" onClose={onClose}>
+      <p className="quote">{text}</p>
       <div className="answer">
         {answer ? (
           <Markdown remarkPlugins={[remarkGfm]}>{answer}</Markdown>
@@ -1041,7 +1351,11 @@ function AskDialog({ text, onClose }: { text: string | null; onClose: () => void
           t("player.asking")
         )}
       </div>
-      <button onClick={() => dialogRef.current?.close()}>{t("common.close")}</button>
+      <div className="actions">
+        <button type="button" className="secondary" onClick={() => dialogRef.current?.close()}>
+          {t("common.close")}
+        </button>
+      </div>
     </dialog>
   );
 }

@@ -71,6 +71,9 @@ export interface StartInput {
   title: string;
   /** Known from the feed before anything is fetched; corrected once transcribed. */
   durationSec?: number;
+  /** The feed's title and cover, kept on the Resource for the shelf and the player. */
+  showTitle?: string;
+  artworkUrl?: string;
 }
 
 /**
@@ -107,6 +110,8 @@ export async function startImport(
     id: deps.newId(),
     source: input.source,
     title: input.title,
+    ...(input.showTitle && { showTitle: input.showTitle }),
+    ...(input.artworkUrl && { artworkUrl: input.artworkUrl }),
     durationSec: input.durationSec ?? 0,
     nativeLanguage: deps.nativeLanguage,
     ...(deps.targetLanguage && { targetLanguage: deps.targetLanguage }),

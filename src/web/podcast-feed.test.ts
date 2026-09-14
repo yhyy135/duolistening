@@ -102,6 +102,33 @@ describe("parsing a feed", () => {
   it("keeps an empty feed empty rather than failing", () => {
     assert.deepEqual(parseFeed(feed("")).episodes, []);
   });
+
+  it("reads the show's cover, and an episode's own where it has one", () => {
+    const parsed = parseFeed(
+      feed(
+        `<itunes:image href="https://img.example/show.jpg"/>` +
+          item(`<title>a</title><enclosure url="https://cdn.example.com/a.mp3"/>`) +
+          item(
+            `<title>b</title><itunes:image href="https://img.example/b.jpg"/>` +
+              `<enclosure url="https://cdn.example.com/b.mp3"/>`,
+          ),
+      ),
+    );
+
+    assert.equal(parsed.artworkUrl, "https://img.example/show.jpg");
+    assert.equal(parsed.episodes[0]?.artworkUrl, undefined, "the show's cover is the fallback");
+    assert.equal(parsed.episodes[1]?.artworkUrl, "https://img.example/b.jpg");
+  });
+
+  it("falls back to RSS's own <image>, and never takes a cover that is not http(s)", () => {
+    const rss = parseFeed(feed(`<image><url>https://img.example/rss.png</url></image>`));
+    assert.equal(rss.artworkUrl, "https://img.example/rss.png");
+
+    // It becomes an <img src> on the shelf.
+    const hostile = parseFeed(feed(`<itunes:image href="javascript:alert(1)"/>`));
+    assert.equal(hostile.artworkUrl, undefined);
+    assert.equal("artworkUrl" in hostile, false, "absent, not undefined");
+  });
 });
 
 describe("fetching a feed", () => {

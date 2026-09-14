@@ -5,7 +5,7 @@ A self-hosted listening-practice tool: import a podcast episode, transcribe it w
 ## Language
 
 **Resource**:
-A podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it. Its audio and its Transcript arrive separately and either can be missing: an episode imported before a Transcription Model was configured has audio and no Lines (ADR 0012), and one restored from a backup has Lines and no audio.
+A podcast episode the user has imported to study. The thing a Transcript belongs to. Carries the language pair it was transcribed in, so later changes to Settings cannot misdescribe it, and its show's title and cover address as the feed gave them, for display. Its audio and its Transcript arrive separately and either can be missing: an episode imported before a Transcription Model was configured has audio and no Lines (ADR 0012), and one restored from a backup has Lines and no audio.
 _Avoid_: Track, episode, video, media, source
 
 **Library**:

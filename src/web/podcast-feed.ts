@@ -30,10 +30,14 @@ export interface PodcastFeed {
    * archive, and a reader who changed their mind should not go on paying a proxy for
    * a list nobody is going to read.
    */
-  listEpisodes(
-    feedUrl: string,
-    signal?: AbortSignal,
-  ): Promise<{ feedTitle: string; episodes: Episode[] }>;
+  listEpisodes(feedUrl: string, signal?: AbortSignal): Promise<FeedListing>;
+}
+
+/** A feed as the picker shows it. `artworkUrl` is the show's cover, when it has one. */
+export interface FeedListing {
+  feedTitle: string;
+  artworkUrl?: string;
+  episodes: Episode[];
 }
 
 export function createPodcastFeed(options: PodcastFeedOptions): PodcastFeed {
@@ -80,12 +84,19 @@ interface RssItem {
   pubDate?: unknown;
   enclosure?: unknown;
   "itunes:duration"?: unknown;
+  "itunes:image"?: unknown;
 }
 
-export function parseFeed(xml: string): { feedTitle: string; episodes: Episode[] } {
+export function parseFeed(xml: string): FeedListing {
   const document = parser.parse(xml) as { rss?: { channel?: unknown } };
   const channel = document.rss?.channel as
-    { title?: unknown; item?: RssItem | RssItem[] } | undefined;
+    | {
+        title?: unknown;
+        item?: RssItem | RssItem[];
+        "itunes:image"?: unknown;
+        image?: unknown;
+      }
+    | undefined;
   if (!channel) throw new Error("Not an RSS feed");
 
   // A feed with exactly one episode parses to an object, not an array.
@@ -98,17 +109,38 @@ export function parseFeed(xml: string): { feedTitle: string; episodes: Episode[]
 
     const durationSec = parseDuration(item["itunes:duration"]);
     const publishedAt = parseDate(item.pubDate);
+    const artworkUrl = imageUrl(item["itunes:image"]);
     return [
       {
         title: text(item.title) || "Untitled episode",
         audioUrl,
         ...(durationSec !== undefined && { durationSec }),
         ...(publishedAt !== undefined && { publishedAt }),
+        ...(artworkUrl && { artworkUrl }),
       },
     ];
   });
 
-  return { feedTitle: text(channel.title) || "Untitled podcast", episodes };
+  const artworkUrl = imageUrl(channel["itunes:image"]) ?? imageUrl(channel.image);
+  return {
+    feedTitle: text(channel.title) || "Untitled podcast",
+    ...(artworkUrl && { artworkUrl }),
+    episodes,
+  };
+}
+
+/**
+ * A cover's URL, in either spelling a feed uses: `<itunes:image href>`, or RSS's own
+ * `<image><url>`. Only http(s), because this ends up as an `<img src>` on the shelf,
+ * and a `javascript:` or `data:` URL out of somebody else's feed has no business there.
+ */
+function imageUrl(image: unknown): string | undefined {
+  for (const candidate of [image].flat()) {
+    const record = candidate as { "@href"?: unknown; url?: unknown } | null;
+    const url = text(record?.["@href"]) || text(record?.url);
+    if (/^https?:\/\//i.test(url)) return url;
+  }
+  return undefined;
 }
 
 /**

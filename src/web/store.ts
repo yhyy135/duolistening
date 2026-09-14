@@ -173,13 +173,23 @@ export function saveTranscript(id: ResourceId, transcript: Transcript): Promise<
 /**
  * Called from `timeupdate`, so several times a minute for as long as something is
  * playing. It touches one row and never reads the Transcript or audio beside it.
+ *
+ * It stamps the time as well as the position, which is how the shelf knows what the
+ * reader was last in the middle of. The stamp is when this ran, so a position parked
+ * by a closing page is dated when the next page claims it — later than the listening,
+ * but still later than every other episode's, which is the only order anything reads.
  */
 export async function savePosition(id: ResourceId, seconds: number): Promise<void> {
   const database = await db();
   const store = database.transaction("resources", "readwrite").objectStore("resources");
   const resource = await value<Resource | undefined>(store.get(id));
   if (!resource) return;
-  await value(store.put({ ...resource, lastPositionSec: seconds }, id));
+  await value(
+    store.put(
+      { ...resource, lastPositionSec: seconds, lastPlayedAt: new Date().toISOString() },
+      id,
+    ),
+  );
 }
 
 /**
