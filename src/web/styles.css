@@ -1156,6 +1156,24 @@ main.library {
 .picker-head .note {
   margin: 0;
 }
+/* At the end of the row, and never squeezed: the show's name beside it is what wraps.
+   Both faces share one cell and one is drawn, so the wider of the two sets the width in
+   either state and starring a show never moves its name. */
+.picker-head .favorite {
+  flex: none;
+  margin-left: auto;
+  display: grid;
+  justify-items: center;
+}
+.picker-head .favorite > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.picker-head .favorite > [aria-hidden="true"] {
+  visibility: hidden;
+}
 .picker-sheet .list {
   overflow: auto;
   overscroll-behavior: contain;

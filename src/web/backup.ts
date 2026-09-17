@@ -1,4 +1,4 @@
-import type { Resource, ResourceId, Settings, Transcript } from "../shared/model.ts";
+import type { Favorite, Resource, ResourceId, Settings, Transcript } from "../shared/model.ts";
 
 /**
  * Export and import of everything the browser holds (ADR 0008).
@@ -29,10 +29,18 @@ export interface Backup {
   /** Absent unless the reader asked for it, and never carrying keys unless they asked twice. */
   settings?: Settings;
   entries: BackupEntry[];
+  /**
+   * Absent from a file written before favorites existed, which reads as none. Added
+   * without moving `BACKUP_VERSION`: an older build rebuilds the envelope from the
+   * fields it knows, so it still restores a newer file's episodes and skips the stars,
+   * where a bump would have it refuse the whole file.
+   */
+  favorites?: Favorite[];
 }
 
 export interface BuildInput {
   entries: BackupEntry[];
+  favorites?: Favorite[];
   settings?: Settings;
   /**
    * Off by default, and deliberately awkward to turn on. A backup lands in cloud
@@ -67,6 +75,7 @@ export function buildBackup(input: BuildInput): { backup: Backup; excluded: Reso
         settings: forExport(input.settings, input.includeKeys ?? false),
       }),
       entries: ready,
+      ...(input.favorites && input.favorites.length > 0 && { favorites: input.favorites }),
     },
     excluded,
   };
@@ -135,6 +144,7 @@ export function parseBackup(text: string): ParseResult {
     if (entry) entries.push(entry);
     else skipped.push(describe(candidate, index));
   }
+  const favorites = Array.isArray(raw.favorites) ? raw.favorites.flatMap(validFavorite) : [];
 
   return {
     ok: true,
@@ -145,6 +155,7 @@ export function parseBackup(text: string): ParseResult {
       exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : "",
       ...(isRecord(raw.settings) && { settings: raw.settings as unknown as Settings }),
       entries,
+      ...(favorites.length > 0 && { favorites }),
     },
   };
 }
@@ -161,13 +172,22 @@ export function parseBackup(text: string): ParseResult {
 export interface ImportPlan {
   add: BackupEntry[];
   alreadyHere: { id: ResourceId; title: string }[];
+  /**
+   * The file's favorites this browser does not have. One it has is left as it is rather
+   * than overwritten, which keeps the date it was starred here, and with it its place.
+   */
+  favorites: Favorite[];
   settings?: Settings;
 }
 
 export function planImport(
   existing: Iterable<ResourceId>,
   backup: Backup,
-  options: { restoreSettings?: boolean } = {},
+  options: {
+    restoreSettings?: boolean;
+    /** The feed URLs already starred here. */
+    favorited?: Iterable<string>;
+  } = {},
 ): ImportPlan {
   const have = new Set(existing);
   const add: BackupEntry[] = [];
@@ -183,9 +203,17 @@ export function planImport(
     }
   }
 
+  const starred = new Set(options.favorited);
+  const favorites = (backup.favorites ?? []).filter((favorite) => {
+    if (starred.has(favorite.feedUrl)) return false;
+    starred.add(favorite.feedUrl);
+    return true;
+  });
+
   return {
     add,
     alreadyHere,
+    favorites,
     ...(options.restoreSettings && backup.settings && { settings: backup.settings }),
   };
 }
@@ -228,6 +256,30 @@ function validEntry(candidate: unknown): BackupEntry | null {
     resource: resource as unknown as Resource,
     transcript: transcript as unknown as Transcript,
   };
+}
+
+/**
+ * Rebuilt field by field rather than cast. The file is untrusted, and two of these
+ * fields leave the page: the feed URL becomes a request through the reader's proxy, and
+ * the cover an `<img src>` — so neither is taken unless it is http(s).
+ */
+function validFavorite(candidate: unknown): Favorite[] {
+  if (!isRecord(candidate)) return [];
+  const { feedUrl, title, author, artworkUrl, addedAt } = candidate;
+  if (!isWebUrl(feedUrl) || typeof title !== "string") return [];
+  return [
+    {
+      feedUrl,
+      title,
+      ...(typeof author === "string" && author && { author }),
+      ...(isWebUrl(artworkUrl) && { artworkUrl }),
+      addedAt: typeof addedAt === "string" ? addedAt : "",
+    },
+  ];
+}
+
+function isWebUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
 function isLine(candidate: unknown): boolean {

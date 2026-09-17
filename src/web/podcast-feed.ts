@@ -36,6 +36,8 @@ export interface PodcastFeed {
 /** A feed as the picker shows it. `artworkUrl` is the show's cover, when it has one. */
 export interface FeedListing {
   feedTitle: string;
+  /** The feed's `itunes:author`, which a Favorite's tile prints under its title. */
+  author?: string;
   artworkUrl?: string;
   episodes: Episode[];
 }
@@ -93,6 +95,7 @@ export function parseFeed(xml: string): FeedListing {
     | {
         title?: unknown;
         item?: RssItem | RssItem[];
+        "itunes:author"?: unknown;
         "itunes:image"?: unknown;
         image?: unknown;
       }
@@ -122,8 +125,10 @@ export function parseFeed(xml: string): FeedListing {
   });
 
   const artworkUrl = imageUrl(channel["itunes:image"]) ?? imageUrl(channel.image);
+  const author = text(channel["itunes:author"]);
   return {
     feedTitle: text(channel.title) || "Untitled podcast",
+    ...(author && { author }),
     ...(artworkUrl && { artworkUrl }),
     episodes,
   };

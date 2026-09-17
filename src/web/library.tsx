@@ -1,12 +1,14 @@
 // The Library screen: what the reader was in the middle of, the shelf, the export that
-// is the only thing standing between a Transcript and an evicted browser, and the day's
-// recommendations under the one box that both searches them and opens a pasted feed.
+// is the only thing standing between a Transcript and an evicted browser, and the
+// reader's Favorites and the day's recommendations under the one box that both searches
+// them and opens a pasted feed.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   LANGUAGES,
   slotConfigured,
   type Episode,
+  type Favorite,
   type ImportPhase,
   type LanguageCode,
   type Resource,
@@ -27,7 +29,15 @@ import { isImporting, startImport, retryImport, type ImportProgress } from "./im
 import { buildImportDeps } from "./pipeline.ts";
 import { createPodcastFeed, type FeedListing } from "./podcast-feed.ts";
 import { proxyUrl } from "./proxy.ts";
-import { allEntries, listResources, readSettings, remove as removeResource } from "./store.ts";
+import {
+  allEntries,
+  listFavorites,
+  listResources,
+  readSettings,
+  remove as removeResource,
+  removeFavorite,
+  saveFavorite,
+} from "./store.ts";
 
 /** The phase names double as i18n keys, so there is no second list to keep in step. */
 const phaseKey = (phase: ImportPhase) => `phase.${phase}` as const;
@@ -76,7 +86,10 @@ const isPlayable = (resource: Resource, phase: ImportPhase) =>
 
 export function LibraryScreen() {
   const [resources, setResources] = useState<Resource[] | null>(null);
-  const [settings, setSettings] = useState<Settings | null>(null);
+  /** Undefined until the store has answered, which is not null: nothing stored. */
+  const [settings, setSettings] = useState<Settings | null | undefined>(undefined);
+  /** Null until the store has answered. */
+  const [favorites, setFavorites] = useState<Favorite[] | null>(null);
   const [running, setRunning] = useState<Record<string, ImportProgress>>({});
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -88,13 +101,39 @@ export function LibraryScreen() {
   const refresh = () =>
     listResources().then(setResources, (failure: unknown) => setError(reason(failure)));
 
+  // A read that fails still settles the state, as none, so the recommendations waiting
+  // on both reads still get to choose a chip.
+  const refreshFavorites = () =>
+    listFavorites().then(setFavorites, (failure: unknown) => {
+      setFavorites((current) => current ?? []);
+      setError(reason(failure));
+    });
+
   useEffect(() => {
     void refresh();
+    void refreshFavorites();
     readSettings().then(
       (loaded) => setSettings(loaded ?? null),
-      (failure: unknown) => setError(reason(failure)),
+      (failure: unknown) => {
+        setSettings(null);
+        setError(reason(failure));
+      },
     );
   }, []);
+
+  /** Stars the show, or takes its star back: the picker has one button for both. */
+  async function toggleFavorite(favorite: Favorite) {
+    try {
+      if (favorites?.some((kept) => kept.feedUrl === favorite.feedUrl)) {
+        await removeFavorite(favorite.feedUrl);
+      } else {
+        await saveFavorite(favorite);
+      }
+    } catch (failure) {
+      setError(reason(failure));
+    }
+    void refreshFavorites();
+  }
 
   async function drive(
     id: string,
@@ -234,13 +273,21 @@ export function LibraryScreen() {
               {t("nav.library")}
               {resources?.length ? <span className="count">{resources.length}</span> : null}
             </h2>
-            <Backup resources={resources} onImported={refresh} onError={setError} />
+            <Backup
+              resources={resources}
+              favorites={favorites}
+              onImported={() => {
+                void refresh();
+                void refreshFavorites();
+              }}
+              onError={setError}
+            />
           </div>
 
           {resources === null ? (
             <p className="notice">{t("common.loading")}</p>
           ) : resources.length === 0 ? (
-            <Welcome settings={settings} />
+            <Welcome settings={settings ?? null} />
           ) : (
             <ul className="shelf">
               {resources.map((resource) => {
@@ -384,10 +431,12 @@ export function LibraryScreen() {
 
         {/* Under the shelf, not above it. A reader with episodes came back for those;
             a reader without any has an empty shelf and this is what fills the screen. */}
-        <Recommended onPick={setHanded} settings={settings} />
+        <Recommended onPick={setHanded} settings={settings} favorites={favorites} />
 
         <EpisodePicker
-          settings={settings}
+          settings={settings ?? null}
+          favorites={favorites}
+          onToggleFavorite={(favorite) => void toggleFavorite(favorite)}
           handed={handed}
           onHandled={() => setHanded("")}
           onStart={(id, begin) => {
@@ -444,14 +493,37 @@ function Welcome({ settings }: { settings: Settings | null }) {
 /** Remembered so the day's one request can happen without asking again every visit. */
 const DISCOVER_KEY = "duolistening.discover";
 
+/** The chip that shows the reader's Favorites instead of a language's recommendations. */
+const FAVORITES = "favorites";
+
 /**
- * The day's recommendations, and the box above them.
+ * The order the language chips are drawn in, which is not `LANGUAGES`' order. A rank per
+ * language rather than a list, so a language added there and forgotten here is a type
+ * error instead of a chip that silently never appears.
+ */
+const CHIP_RANK: Record<LanguageCode, number> = {
+  en: 0,
+  ja: 1,
+  ko: 2,
+  de: 3,
+  fr: 4,
+  es: 5,
+  "zh-CN": 6,
+  "zh-TW": 7,
+};
+const CHIP_LANGUAGES = [...LANGUAGES].sort((a, b) => CHIP_RANK[a] - CHIP_RANK[b]);
+
+/**
+ * The reader's Favorites and the day's recommendations, and the box above them.
  *
  * Apple's top-charts feed sends no CORS headers and cannot be read from a page at
  * all, so "what is popular" is approximated by what a storefront answers for that
  * language's own search terms — which for someone studying the language is the better
  * list anyway, and it arrives with the `feedUrl` an import needs. `itunes.ts` owns the
  * queries and the once-a-day cache; this only decides which language to ask about.
+ *
+ * The Favorites are the first chip, and drawn from the store alone: a star is added and
+ * taken back in the episode picker, and showing them asks nobody for anything.
  *
  * The box takes either kind of answer to "what do you want to listen to": a word, which
  * searches, or a link, which is a feed to open. It used to be two boxes a screen apart,
@@ -462,14 +534,19 @@ const DISCOVER_KEY = "duolistening.discover";
  */
 function Recommended({
   settings,
+  favorites,
   onPick,
 }: {
-  settings: Settings | null;
+  /** Undefined until the store has answered. */
+  settings: Settings | null | undefined;
+  /** Null until the store has answered. */
+  favorites: Favorite[] | null;
   onPick: (feedUrl: string) => void;
 }) {
   const t = useT();
   const languageOf = useLanguageName();
-  const [language, setLanguage] = useState<LanguageCode | null>(null);
+  /** A language, or the Favorites. Null only until both reads above are in. */
+  const [chosen, setChosen] = useState<LanguageCode | typeof FAVORITES | null>(null);
   const [items, setItems] = useState<PodcastSuggestion[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -480,22 +557,29 @@ function Recommended({
   // does: the language has not changed, so nothing else would tell it to.
   const [refresh, setRefresh] = useState(0);
 
-  // What the reader said they are studying, else whichever language they last asked
-  // about here. Both unset is the honest case rather than a default: the studied
-  // language is optional by design, and guessing one would recommend Spanish to
-  // somebody learning Korean. The chips below are then the only way in.
+  // Which chip a visit opens on, decided once and only when both reads are in: the
+  // Favorites when there are any, else what the reader said they are studying, else the
+  // language they last picked here, else English. Deciding on the settings alone would
+  // draw a language's list — and ask Apple for it — a moment before the Favorites
+  // replaced it. Once decided it stays put: starring a first show, or taking the last
+  // star away, leaves the reader on the chip they are looking at.
   useEffect(() => {
-    setLanguage((chosen) => chosen ?? settings?.targetLanguage ?? stored());
-  }, [settings]);
+    if (settings === undefined || favorites === null) return;
+    setChosen(
+      (current) =>
+        current ??
+        (favorites.length > 0 ? FAVORITES : (settings?.targetLanguage ?? stored() ?? "en")),
+    );
+  }, [settings, favorites]);
 
   useEffect(() => {
-    if (!language) return;
-    setBusy(true);
     setFailed(false);
-    recommendedFor(language)
+    if (!chosen || chosen === FAVORITES) return;
+    setBusy(true);
+    recommendedFor(chosen)
       .then(setItems, () => setFailed(true))
       .finally(() => setBusy(false));
-  }, [language, refresh]);
+  }, [chosen, refresh]);
 
   // Back to the day's list: the cache in itunes.ts means this is free in the normal
   // case, same as picking a language chip is.
@@ -508,15 +592,22 @@ function Recommended({
 
   function choose(code: LanguageCode) {
     // Through clearSearch, so the chip already showing as chosen still reloads. Its
-    // own setLanguage is a no-op in that case, the effect's deps never change, and
+    // own setChosen is a no-op in that case, the effect's deps never change, and
     // the list it just emptied would stay empty for as long as the screen is open.
     clearSearch();
-    setLanguage(code);
+    setChosen(code);
     try {
       localStorage.setItem(DISCOVER_KEY, code);
     } catch {
       // Private mode. The chip still works for this visit, which is all it owes.
     }
+  }
+
+  // Not remembered: the stored key is the language last asked about, and with any
+  // Favorites at all a visit opens on them anyway.
+  function chooseFavorites() {
+    clearSearch();
+    setChosen(FAVORITES);
   }
 
   async function submit(event: React.FormEvent) {
@@ -531,12 +622,14 @@ function Recommended({
     setFailed(false);
     try {
       // Deliberately past the cache: a search is the reader asking for something the
-      // day's list did not have. With no language chosen there is no storefront to
-      // prefer, and the US one holds the widest catalogue.
+      // day's list did not have. With the Favorites on screen the storefront is the one
+      // for what the reader studies; with no language at all there is none to prefer,
+      // and the US one holds the widest catalogue.
+      const market = chosen && chosen !== FAVORITES ? chosen : settings?.targetLanguage;
       setItems(
         await searchPodcasts({
           term: wanted,
-          country: language ? MARKETS[language].country : "US",
+          country: market ? MARKETS[market].country : "US",
         }),
       );
       setSearched(wanted);
@@ -547,12 +640,28 @@ function Recommended({
     }
   }
 
+  const showingFavorites = chosen === FAVORITES && !searched;
+  // Both lists draw the same tile. A Favorite has no genres, so it never has the badge.
+  const tiles = showingFavorites
+    ? (favorites ?? []).map((favorite) => ({
+        ...favorite,
+        key: favorite.feedUrl,
+        learning: false,
+      }))
+    : (items ?? []).map((suggestion) => ({
+        ...suggestion,
+        key: String(suggestion.collectionId),
+        learning: suggestion.genreIds.includes(LANGUAGE_LEARNING_GENRE),
+      }));
+
   return (
     <section className="discover" aria-labelledby="discover-title">
       <div className="section-head">
         <h2 id="discover-title">{t("discover.title")}</h2>
       </div>
-      <p className="hint">{t("discover.subtitle")}</p>
+      <p className="hint">
+        {showingFavorites ? t("discover.favoritesSubtitle") : t("discover.subtitle")}
+      </p>
 
       <form className="search-field" role="search" onSubmit={(event) => void submit(event)}>
         <Icon name="search" />
@@ -581,12 +690,21 @@ function Recommended({
       </form>
 
       <div className="chips">
-        {LANGUAGES.map((code) => (
+        <button
+          type="button"
+          className={showingFavorites ? "chip on" : "chip"}
+          aria-pressed={showingFavorites}
+          onClick={chooseFavorites}
+        >
+          <Icon name="star" />
+          <span>{t("discover.favorites")}</span>
+        </button>
+        {CHIP_LANGUAGES.map((code) => (
           <button
             key={code}
             type="button"
-            className={code === language && !searched ? "chip on" : "chip"}
-            aria-pressed={code === language && !searched}
+            className={code === chosen && !searched ? "chip on" : "chip"}
+            aria-pressed={code === chosen && !searched}
             onClick={() => choose(code)}
           >
             {languageOf(code)}
@@ -595,28 +713,24 @@ function Recommended({
       </div>
 
       {searched && <p className="results-for">{t("discover.results", { term: searched })}</p>}
-      {!language && !searched && <p className="notice">{t("discover.pickLanguage")}</p>}
       {busy && <p className="notice">{t("discover.loading")}</p>}
       {failed && <p className="error">{t("discover.failed")}</p>}
-      {items?.length === 0 && !busy && <p className="notice">{t("discover.empty")}</p>}
+      {showingFavorites
+        ? favorites?.length === 0 && <p className="notice">{t("discover.noFavorites")}</p>
+        : items?.length === 0 && !busy && <p className="notice">{t("discover.empty")}</p>}
 
       <ul className="suggestions">
-        {items?.map((suggestion) => (
-          <li key={suggestion.collectionId}>
-            <button
-              type="button"
-              className="suggestion"
-              onClick={() => onPick(suggestion.feedUrl)}
-            >
-              {/* Straight from Apple's CDN, which needs no proxy for an image element
-                  and no key. The cost is one outbound request per card and a monogram
-                  offline, which is why nothing but the artwork depends on it. */}
-              <Cover src={suggestion.artworkUrl} name={suggestion.title} />
-              <span className="title">{suggestion.title}</span>
-              <span className="author">{suggestion.author}</span>
-              {suggestion.genreIds.includes(LANGUAGE_LEARNING_GENRE) && (
-                <span className="badge">{t("discover.languageLearning")}</span>
-              )}
+        {tiles.map((tile) => (
+          <li key={tile.key}>
+            <button type="button" className="suggestion" onClick={() => onPick(tile.feedUrl)}>
+              {/* Straight from the host — Apple's CDN for a Suggestion, the feed's own for
+                  a Favorite — which needs no proxy for an image element and no key. The
+                  cost is one outbound request per card and a monogram offline, which is
+                  why nothing but the artwork depends on it. */}
+              <Cover src={tile.artworkUrl} name={tile.title} />
+              <span className="title">{tile.title}</span>
+              {tile.author && <span className="author">{tile.author}</span>}
+              {tile.learning && <span className="badge">{t("discover.languageLearning")}</span>}
             </button>
           </li>
         ))}
@@ -645,10 +759,12 @@ function stored(): LanguageCode | null {
  */
 function Backup({
   resources,
+  favorites,
   onImported,
   onError,
 }: {
   resources: Resource[] | null;
+  favorites: Favorite[] | null;
   onImported: () => void;
   onError: (message: string) => void;
 }) {
@@ -658,7 +774,10 @@ function Backup({
 
   async function save() {
     try {
-      const { backup } = buildBackup({ entries: await allEntries() });
+      const { backup } = buildBackup({
+        entries: await allEntries(),
+        favorites: await listFavorites(),
+      });
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(backup)], { type: "application/json" }),
       );
@@ -678,11 +797,14 @@ function Backup({
     if (!parsed.ok) return onError(parsed.problem);
 
     const have = (resources ?? []).map((resource) => resource.id);
-    const plan = planImport(have, parsed.backup);
+    const plan = planImport(have, parsed.backup, {
+      favorited: (favorites ?? []).map((favorite) => favorite.feedUrl),
+    });
     const { save: saveEntry } = await import("./store.ts");
     for (const entry of plan.add) {
       await saveEntry({ resource: entry.resource, transcript: entry.transcript });
     }
+    for (const favorite of plan.favorites) await saveFavorite(favorite);
     setStatus(
       t("library.imported", { added: plan.add.length, skipped: plan.alreadyHere.length }),
     );
@@ -692,8 +814,9 @@ function Backup({
   return (
     <div className="backup">
       {/* Restore is offered on an empty shelf, which is exactly the shelf a new device
-          or an evicted browser has; Export is not, having nothing to write. */}
-      {resources?.length ? (
+          or an evicted browser has; Export is not, having nothing to write — unless
+          there are Favorites, which are worth carrying to another device on their own. */}
+      {resources?.length || favorites?.length ? (
         <button type="button" className="ghost small" onClick={() => void save()}>
           <Icon name="download" />
           <span>{t("library.exportBackup")}</span>
@@ -727,12 +850,17 @@ function Backup({
  */
 function EpisodePicker({
   settings,
+  favorites,
+  onToggleFavorite,
   handed,
   onHandled,
   onStart,
   onError,
 }: {
   settings: Settings | null;
+  favorites: Favorite[] | null;
+  /** Stars the listed show, or takes its star back. */
+  onToggleFavorite: (favorite: Favorite) => void;
   /** A feed URL to open, or "" for nothing pending. */
   handed: string;
   onHandled: () => void;
@@ -762,6 +890,8 @@ function EpisodePicker({
   const listRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const t = useT();
+  /** Whether the show on screen is starred — by the feed URL it was opened with. */
+  const favorited = Boolean(favorites?.some((kept) => kept.feedUrl === listed));
 
   // A feed, opened in the one episode picker this screen has. Cleared as soon as it is
   // taken, so picking the same show again after importing from it is not a dead click.
@@ -940,6 +1070,31 @@ function EpisodePicker({
               <p className="sheet-title">{feed.feedTitle}</p>
               <p className="note">{t("library.pickEpisode")}</p>
             </div>
+            <button
+              type="button"
+              className="secondary small favorite"
+              onClick={() =>
+                onToggleFavorite({
+                  feedUrl: listed,
+                  title: feed.feedTitle,
+                  ...(feed.author && { author: feed.author }),
+                  ...(feed.artworkUrl && { artworkUrl: feed.artworkUrl }),
+                  addedAt: new Date().toISOString(),
+                })
+              }
+            >
+              {/* Both faces are laid out and one is drawn, so the button is as wide as the
+                  wider of them in every language, and the show's name beside it never
+                  re-wraps on a click. Each face's icon and label say what a click does. */}
+              <span aria-hidden={favorited}>
+                <Icon name="star" />
+                {t("library.favorite")}
+              </span>
+              <span aria-hidden={!favorited}>
+                <Icon name="star-off" />
+                {t("library.unfavorite")}
+              </span>
+            </button>
           </div>
           {/* The scroll is here and not on the dialog, so the show's name, the header
               row and the buttons stay put while three hundred episodes move. */}

@@ -396,12 +396,13 @@ The page is a full-height flex column: a top bar, then `main`. There are two scr
 - **Primary:** accent background with on-accent text. Hover brightens it to 1.06.
 - **Ghost:** no background, dim text at weight 500. Hover gives raised and ink.
 - **Danger:** bad-coloured text.
+- **Favorite** (the episode picker's header, at the end of the row): a small secondary button whose icon and label both say what a click does — Favorite with a star, then Unfavorite with a struck-out star. It is as wide as the wider of the two, so starring a show never moves its name.
 - **Focus:** the only focus ring is a 2px accent outline offset 2px, shown on keyboard focus only.
 - **Station:** secondary buttons and chips are raised with a 1.5px hairline inset. Hover darkens the inset to faint.
 
 ### Chips and segments
 
-- **Chip:** raised background, dim text, 0.875rem at weight 600. Selected is accent with on-accent text in both looks.
+- **Chip:** raised background, dim text, 0.875rem at weight 600. Selected is accent with on-accent text in both looks. The Favorites chip leads the row, before the languages, with a star ahead of its label.
 - **Subtitle modes** (Both, Original, Hidden): a radio group drawn as its labels. Standard draws a hairline track holding pills and selects in the accent. Station draws a field track with a hairline inset, 3px segments, and selects in thumb (ink). Hidden blurs each Line's text and translation by 0.42em until that Line is revealed.
 - **Theme chips and look cards:** select in the accent. A look card shows its selection as a 2px inset ring, 3px in Station.
 

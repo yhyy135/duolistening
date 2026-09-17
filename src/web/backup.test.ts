@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Resource, Settings, Transcript } from "../shared/model.ts";
+import type { Favorite, Resource, Settings, Transcript } from "../shared/model.ts";
 import {
   BACKUP_VERSION,
   audioMatches,
@@ -190,6 +190,59 @@ test("import adds what is missing and never touches what is here", () => {
     ["want"],
   );
   assert.deepEqual(plan.alreadyHere, [{ id: "have", title: "Already" }]);
+});
+
+function favorite(over: Partial<Favorite> = {}): Favorite {
+  return {
+    feedUrl: "https://feeds.example/show.xml",
+    title: "ゆる言語学ラジオ",
+    author: "ゆる言語学ラジオ",
+    artworkUrl: "https://img.example/show.jpg",
+    addedAt: "2026-09-17T08:00:00.000Z",
+    ...over,
+  };
+}
+
+test("favorites travel in the backup, and a file from before them has none", () => {
+  const { backup } = buildBackup({ entries: [entry()], favorites: [favorite()] });
+  const parsed = parseBackup(JSON.stringify(backup));
+  assert.deepEqual(parsed.ok && parsed.backup.favorites, [favorite()]);
+
+  const older = parseBackup(JSON.stringify(buildBackup({ entries: [entry()] }).backup));
+  assert.equal(older.ok && "favorites" in older.backup, false);
+  assert.deepEqual(older.ok && planImport([], older.backup).favorites, []);
+});
+
+test("a favorite is rebuilt from the file, and a URL that is not http(s) is not taken", () => {
+  const { backup } = buildBackup({ entries: [entry()] });
+  const parsed = parseBackup(
+    JSON.stringify({
+      ...backup,
+      favorites: [
+        { ...favorite(), artworkUrl: "javascript:alert(1)", extra: "not ours" },
+        favorite({ feedUrl: "file:///etc/passwd" }),
+        "not a favorite",
+      ],
+    }),
+  );
+  const { artworkUrl: _dropped, ...kept } = favorite();
+  assert.deepEqual(parsed.ok && parsed.backup.favorites, [kept]);
+});
+
+test("import adds the favorites this browser lacks and leaves the rest as they are", () => {
+  const { backup } = buildBackup({
+    entries: [entry()],
+    favorites: [
+      favorite({ feedUrl: "https://feeds.example/have.xml" }),
+      favorite({ feedUrl: "https://feeds.example/new.xml" }),
+      favorite({ feedUrl: "https://feeds.example/new.xml" }),
+    ],
+  });
+  const plan = planImport([], backup, { favorited: ["https://feeds.example/have.xml"] });
+  assert.deepEqual(
+    plan.favorites.map((kept) => kept.feedUrl),
+    ["https://feeds.example/new.xml"],
+  );
 });
 
 test("a file listing the same id twice queues it once", () => {

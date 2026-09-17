@@ -120,6 +120,12 @@ describe("parsing a feed", () => {
     assert.equal(parsed.episodes[1]?.artworkUrl, "https://img.example/b.jpg");
   });
 
+  it("reads who makes the show, and leaves it out when the feed does not say", () => {
+    const parsed = parseFeed(feed(`<itunes:author>ゆる言語学ラジオ</itunes:author>`));
+    assert.equal(parsed.author, "ゆる言語学ラジオ");
+    assert.equal("author" in parseFeed(feed("")), false, "absent, not empty");
+  });
+
   it("falls back to RSS's own <image>, and never takes a cover that is not http(s)", () => {
     const rss = parseFeed(feed(`<image><url>https://img.example/rss.png</url></image>`));
     assert.equal(rss.artworkUrl, "https://img.example/rss.png");

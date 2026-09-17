@@ -152,6 +152,22 @@ export interface Resource {
   lastPlayedAt?: string;
 }
 
+/**
+ * A show the reader starred to come back to, kept by its feed URL with everything its
+ * tile on the home screen draws — so showing the Favorites asks nobody for anything. Not
+ * a subscription: nothing is fetched or imported because a show is here.
+ */
+export interface Favorite {
+  feedUrl: string;
+  title: string;
+  /** The feed's `itunes:author`, when it names one. */
+  author?: string;
+  /** The show's cover, as the feed gave it, and loaded from its host like every cover. */
+  artworkUrl?: string;
+  /** ISO 8601. The tiles are newest first, and nothing else reorders them. */
+  addedAt: string;
+}
+
 export interface ModelSlot {
   baseUrl: string;
   apiKey: string;

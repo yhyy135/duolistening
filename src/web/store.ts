@@ -1,4 +1,4 @@
-import type { Resource, ResourceId, Settings, Transcript } from "../shared/model.ts";
+import type { Favorite, Resource, ResourceId, Settings, Transcript } from "../shared/model.ts";
 import type { BackupEntry } from "./backup.ts";
 
 /**
@@ -22,11 +22,22 @@ import type { BackupEntry } from "./backup.ts";
  */
 
 const DB_NAME = "duolistening";
-const DB_VERSION = 1;
+/**
+ * 2 added `favorites`. An upgrade only ever creates a store that is missing, so a
+ * Library written at 1 opens with everything it had. What a bump costs is one moment: a
+ * tab still running the older build holds version 1 open, and this page is refused with
+ * the message in `onblocked` until that tab is closed and this one reloaded.
+ */
+const DB_VERSION = 2;
 const SETTINGS_KEY = "settings";
 
-/** One store each, all keyed by ResourceId except settings, which is a single row. */
-const STORES = ["settings", "resources", "transcripts", "audio"] as const;
+/**
+ * One store each, keyed by ResourceId — except settings, which is a single row, and
+ * favorites, which are keyed by feed URL. Favorites are not a field of Settings: the
+ * Settings screen writes that row whole, from the copy it read when it opened or from a
+ * pasted string rebuilt field by field, and either would empty a list kept inside it.
+ */
+const STORES = ["settings", "resources", "transcripts", "audio", "favorites"] as const;
 type StoreName = (typeof STORES)[number];
 
 let opening: Promise<IDBDatabase> | undefined;
@@ -267,6 +278,31 @@ export async function allEntries(): Promise<BackupEntry[]> {
     if (transcript) entries.push({ resource, transcript });
   }
   return entries;
+}
+
+// ---------------------------------------------------------------- favorites
+
+/**
+ * Newest first, by when each show was starred and by nothing else — the tiles stay where
+ * the reader left them, which is the same reason the shelf is not reordered by listening.
+ */
+export async function listFavorites(): Promise<Favorite[]> {
+  const store = (await db()).transaction("favorites", "readonly").objectStore("favorites");
+  const all = await value(store.getAll() as IDBRequest<Favorite[]>);
+  return all.sort((left, right) => right.addedAt.localeCompare(left.addedAt));
+}
+
+/** Keyed by feed URL, so starring the same show twice is still one Favorite. */
+export function saveFavorite(favorite: Favorite): Promise<void> {
+  return tx(["favorites"], "readwrite", (transaction) => {
+    transaction.objectStore("favorites").put(favorite, favorite.feedUrl);
+  });
+}
+
+export function removeFavorite(feedUrl: string): Promise<void> {
+  return tx(["favorites"], "readwrite", (transaction) => {
+    transaction.objectStore("favorites").delete(feedUrl);
+  });
 }
 
 // ---------------------------------------------------------------- audio typing
