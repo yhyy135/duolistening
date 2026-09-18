@@ -2,8 +2,8 @@
 // This file is the reason the project is one language (ADR 0006) — keep it free
 // of runtime dependencies so either side can import it without dragging anything in.
 
-/** The fixed language list behind both settings dropdowns. */
-export const LANGUAGES = ["ja", "en", "zh-CN", "zh-TW", "ko", "es", "fr", "de"] as const;
+/** The fixed language list behind both settings dropdowns, in the order they list it. */
+export const LANGUAGES = ["en", "zh-CN", "zh-TW", "ja", "ko", "de", "fr", "es"] as const;
 export type LanguageCode = (typeof LANGUAGES)[number];
 
 /** Japanese unlocks the Token features (furigana, part-of-speech colouring). */

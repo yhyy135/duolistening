@@ -109,11 +109,11 @@ export function wantsJapanese(lines: Transcript, targetLanguage?: LanguageCode):
 /**
  * Lines per block of the grid `nextWindow` works on. A window is at most three blocks —
  * the one being listened to and one either side — and goes out as a single request, so
- * this is sized for sixty Lines to come back in one reply: two or three thousand tokens
- * of translation, inside the 4,096-token reply some providers stop at unless told
- * otherwise. Forty to a block would make that window a hundred and twenty Lines.
+ * a window is at most thirty Lines, well inside the 4,096-token reply some providers stop
+ * at unless told otherwise. It was twenty, and sixty Lines to a window; ten halves every
+ * request, and the price is that listening sends one every ten Lines, not every twenty.
  */
-export const BLOCK_LINES = 20;
+export const BLOCK_LINES = 10;
 
 /** A slice of a Transcript to translate, and the blocks it covers. */
 export interface TranslationWindow {
