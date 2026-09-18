@@ -64,7 +64,7 @@ There is no `ports.ts` any more. It existed to hold the seams a server needed; w
 | `podcast-feed.ts`      | RSS fetching (through the proxy) and parsing                                                                                                                   |
 | `itunes.ts`            | Apple's podcast search, the language-to-storefront table, and the once-a-day cache                                                                             |
 | `icons.tsx`            | Reicon's SVGs, inlined — one `<Icon name>` and nothing else                                                                                                    |
-| `cover.tsx`            | A show's cover or its monogram, and the Station look's numbering sign                                                                                          |
+| `cover.tsx`            | A show's cover, or its monogram where there is none                                                                                                            |
 | `markdown.ts`          | The one piece of HTML an ask-AI answer may carry: `<br>`, as a line break                                                                                      |
 | `appearance.ts`        | Which look and which theme this device draws, applied before first paint and the moment either changes                                                         |
 | `model-check.ts`       | Trying both slots for real, so a typo surfaces in Settings and not mid-import                                                                                  |

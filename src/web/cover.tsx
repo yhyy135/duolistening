@@ -1,5 +1,4 @@
-// What identifies an episode at a glance: its show's cover, and — in the Station look —
-// the numbering sign carrying its language pair.
+// What identifies an episode at a glance, in both looks: its show's cover.
 //
 // The cover is the show's own artwork when the feed gave one, and a monogram where there
 // is none: an episode imported before covers were recorded, a page opened offline, or a
@@ -12,7 +11,6 @@
 // goes out with no referrer, so the host learns an address and not this page.
 
 import { useState } from "react";
-import type { LanguageCode, Resource } from "../shared/model.ts";
 
 /**
  * Two characters for a name in a script without word spaces — the first two of
@@ -40,25 +38,6 @@ function tint(name: string): number {
   let sum = 0;
   for (const character of name) sum += character.codePointAt(0) ?? 0;
   return (sum % 6) + 1;
-}
-
-/** Two letters for a language. */
-const code = (language: LanguageCode) => language.slice(0, 2).toUpperCase();
-
-/**
- * The Station look's numbering sign: the show's code over the language it is in, the way
- * a station's sign carries its line's code over its number. By show and not by language
- * pair, because every Japanese episode on a Chinese reader's shelf read "JA ZH", and a
- * sign every row shares identifies nothing. The Standard look does not draw it, and it is
- * decorative in both — the title and the language pair are written out beside it.
- */
-export function LineBadge({ resource }: { resource: Resource }) {
-  return (
-    <span className="line-badge" aria-hidden="true">
-      <b>{monogram(resource.showTitle ?? resource.title)}</b>
-      <i>{resource.targetLanguage ? code(resource.targetLanguage) : "··"}</i>
-    </span>
-  );
 }
 
 /**

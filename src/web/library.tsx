@@ -15,7 +15,7 @@ import {
   type Settings,
 } from "../shared/model.ts";
 import { backupFilename, buildBackup, parseBackup, planImport } from "./backup.ts";
-import { Cover, LineBadge } from "./cover.tsx";
+import { Cover } from "./cover.tsx";
 import { Icon } from "./icons.tsx";
 import { useLanguageName, useT } from "./i18n.ts";
 import {
@@ -243,7 +243,6 @@ export function LibraryScreen() {
             <h2 id="resume-title">{t("library.continue")}</h2>
             <a className="resume-card" href={`#/r/${encodeURIComponent(resume.id)}`}>
               <Cover src={resume.artworkUrl} name={resume.showTitle ?? resume.title} />
-              <LineBadge resource={resume} />
               <span className="row-body">
                 <span className="title">{resume.title}</span>
                 <span className="meta">
@@ -314,7 +313,6 @@ export function LibraryScreen() {
                         src={resource.artworkUrl}
                         name={resource.showTitle ?? resource.title}
                       />
-                      <LineBadge resource={resource} />
                       <span className="row-body">
                         <span className="title">{resource.title}</span>
                         <span className="meta">

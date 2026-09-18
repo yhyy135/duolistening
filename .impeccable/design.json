@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-14T17:21:53.120Z",
+  "generatedAt": "2026-09-18T02:10:34.880Z",
   "title": "Design System: Duolistening",
   "extensions": {
     "looks": {
@@ -1093,14 +1093,6 @@
       "css": ".ds-play{display:grid;place-items:center;width:3.75rem;height:3.75rem;border:0;border-radius:50%;background:var(--accent,#2459d6);color:var(--on-accent,#fff);box-shadow:0 12px 24px -14px var(--accent,#2459d6);cursor:pointer;transition:transform .08s}.ds-play:active{transform:translateY(1px)}.ds-play:focus-visible{outline:2px solid var(--accent,#2459d6);outline-offset:2px}"
     },
     {
-      "name": "Numbering Badge (Station)",
-      "kind": "custom",
-      "refersTo": "sta-line-badge",
-      "description": "Show code over studied language, framed in route green.",
-      "html": "<span class=\"ds-badge\"><b>ごん</b><i>JA</i></span>",
-      "css": ".ds-badge{display:grid;grid-template-rows:1fr 1fr;place-items:center;width:2.625rem;height:2.625rem;padding:2px 0;border:3px solid var(--sta-accent,#2b7a34);border-radius:8px;background:var(--sta-raised,#fff);color:var(--sta-ink,#14171c);line-height:1;font-family:Barlow,system-ui,sans-serif}.ds-badge b{align-self:end;font-size:.8125rem;font-weight:800;letter-spacing:.02em}.ds-badge i{align-self:start;padding-top:1px;font-size:.6875rem;font-style:normal;font-weight:700;color:var(--sta-dim,#434a52)}"
-    },
-    {
       "name": "Timetable Stop and LED Strip (Station)",
       "kind": "custom",
       "refersTo": "sta-ticker",
@@ -1116,7 +1108,7 @@
       "Two looks over one DOM, each in light, dark and auto, chosen per device.",
       "Every colour is a `light-dark()` token, and rules use aliases rather than a look's palette.",
       "Standard: a system sans, pills and round transport buttons, real cover art, a blurred cover wash, one blue accent.",
-      "Station: Barlow for Latin, square sign panels, the route in green, amber LED status, a numbering badge per show.",
+      "Station: Barlow for Latin, square sign panels and square covers, the route in green, amber LED status.",
       "CJK text is never given a named family. The `lang` on each Line picks the glyph forms.",
       "Tabular numerals wherever a number changes as you watch."
     ],
@@ -1175,7 +1167,7 @@
       "**Don't** write a hex value, `rgb()` or a named colour below the palette block.",
       "**Don't** name a CJK font family in any stack.",
       "**Don't** use Standard's blue for anything but play, the word fill, progress, focus and selection. Don't use Station's green for anything off the route, play and selection. Don't use red for anything but failure.",
-      "**Don't** round Station's panels, controls or Lines beyond 4px. The only rounded exceptions are stops, circular transport buttons and the numbering badge.",
+      "**Don't** round Station's panels, controls or Lines beyond 4px. The only rounded exceptions are stops and circular transport buttons.",
       "**Don't** draw a coloured side border to mark a Line or a card as active. Use a filled stop, a badge, an inset ring or the accent fill.",
       "**Don't** name a class `pending`, `now`, `said`, `passed`, `current` or `next` for anything other than the sweep and Line states.",
       "**Don't** set `maximum-scale` on the viewport or use `type=\"password\"` on a key field.",

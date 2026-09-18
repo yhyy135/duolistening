@@ -169,7 +169,6 @@ rounded:
   sta-band: "5px"
   sta-labeled: "6px"
   std-cover-bar: "7px"
-  sta-badge: "8px"
   std-cover-small: "9px"
   std-field: "10px"
   preview: "11px"
@@ -244,11 +243,6 @@ components:
     textColor: "{colors.sta-on-accent}"
     rounded: "{rounded.round}"
     size: "4rem"
-  sta-line-badge:
-    backgroundColor: "{colors.sta-raised}"
-    textColor: "{colors.sta-ink}"
-    rounded: "{rounded.sta-badge}"
-    size: "2.625rem"
   sta-ticker:
     backgroundColor: "{colors.sta-led-ground}"
     textColor: "{colors.sta-led}"
@@ -277,7 +271,7 @@ Density is calm and even. A 60rem column is used on the shelf, a 40rem column in
 - Two looks over one DOM, each in light, dark and auto, chosen per device.
 - Every colour is a `light-dark()` token, and rules use aliases rather than a look's palette.
 - Standard: a system sans, pills and round transport buttons, real cover art, a blurred cover wash, one blue accent.
-- Station: Barlow for Latin, square sign panels, the route in green, amber LED status, a numbering badge per show.
+- Station: Barlow for Latin, square sign panels and square covers, the route in green, amber LED status.
 - CJK text is never given a named family. The `lang` on each Line picks the glyph forms.
 - Tabular numerals wherever a number changes as you watch.
 
@@ -340,9 +334,9 @@ Rules use the alias names `--ground`, `--raised`, `--field`, `--thumb`, `--hairl
 - **Status** (Station, 700, 0.75rem, +0.06em, tabular): the LED ticker.
 - **Data** (mono, 400, 0.75rem): the settings transfer string, shown whole so a hand-typed copy can be checked.
 - **Small** (400, 0.875rem): notices, errors, sheet notes, the search-results line and picker durations. At 600 for chips, Suggestion titles and the rate select. Also Standard's side-column meta, and Station's translations and line counter.
-- **Micro** (600, 0.6875rem): key caps and the language-learning badge. In Station, also the badge's language, the labelled transport captions and the LED strip on phones.
+- **Micro** (600, 0.6875rem): key caps and the language-learning badge. In Station, also the labelled transport captions and the LED strip on phones.
 - **Brand** (700, 1.0625rem): the app's name in the top bar, and the first-run heading.
-- **Monogram** (700, -0.02em): 1.05rem on shelf covers, 1.25rem in the episode picker, 1.5rem on the resume card, 1.75rem on Suggestions and 3.25rem in Standard's side column.
+- **Monogram** (700, -0.02em): 1.05rem on shelf covers, 1.25rem in the episode picker, 1.5rem on the resume card, 1.75rem on Suggestions and 3.25rem in Standard's side column. Station's smaller covers take 0.8125rem on the shelf and in the player's top bar, and 1rem on the resume card.
 - **Furigana** (500, 0.5em, dim): `rt` over a Token at its natural width, so a reading wider than its Token spaces the text beneath it rather than running into its neighbour's. Every Line of a Japanese Transcript carries its readings; only the current Line shows them.
 
 ### Named Rules
@@ -385,7 +379,7 @@ The page is a full-height flex column: a top bar, then `main`. There are two scr
 ## Shapes
 
 - **Standard** uses soft, rounded shapes. Pills (999px) for buttons, chips, segments, theme chips and the rate select. Circles for icon buttons, transport and play. 10px for fields, 9px for small covers, 12px for shelf and Suggestion covers, 18px for the side-column cover, look cards and fieldsets, 20px for the resume card, 22px for sheets (top corners only on phones), 16px for a Line's hover and repeat background, 11px for the look previews in Settings, 7px for the cover in the player's top bar, and 3px for a Token's sweep highlight.
-- **Station** uses square corners. 4px for buttons, chips, fields, cards, sheets and fieldsets; 2px for covers, phase tags and previews; 0 for Lines, the dock and progress bars. Rounding is kept where the metaphor needs it: circular stops, transport and play; the numbering badge's framed sign at 8px (10px on the resume card); labelled transport buttons at 6px; a 5px progress band; a 3px subtitle-segment thumb; 1px rules inside the look preview; and a 4px route.
+- **Station** uses square corners. 4px for buttons, chips, fields, cards, sheets and fieldsets; 2px for covers, phase tags and previews; 0 for Lines, the dock and progress bars. Rounding is kept where the metaphor needs it: circular stops, transport and play; labelled transport buttons at 6px; a 5px progress band; a 3px subtitle-segment thumb; 1px rules inside the look preview; and a 4px route.
 
 ## Components
 
@@ -408,8 +402,8 @@ The page is a full-height flex column: a top bar, then `main`. There are two scr
 
 ### Cards / Containers
 
-- **Resume card:** raised, 20px corners, a 4.75rem cover and a round 3rem accent play button that scales to 1.06 on hover. In Station it is a 4px framed panel and shows the numbering badge instead of the cover.
-- **Shelf:** rows separated by hairline dividers, showing cover, title and phase. In Station it becomes a departure board: a framed raised panel with no covers, bold titles, LED phase tags, and failures in bare red.
+- **Resume card:** raised, 20px corners, a 4.75rem cover and a round 3rem accent play button that scales to 1.06 on hover. In Station it is a 4px framed panel, with a flat 3.25rem cover.
+- **Shelf:** rows separated by hairline dividers, showing cover, title and phase. In Station it becomes a departure board: a framed raised panel with 2.625rem covers, bold titles, LED phase tags, and failures in bare red.
 - **Fieldsets (Settings):** raised, 18px corners, 1rem padding. In Station each is a 4px framed panel, and its legend becomes a full-width black sign header.
 
 ### Inputs / Fields
@@ -424,11 +418,7 @@ The page is a full-height flex column: a top bar, then `main`. There are two scr
 
 ### Cover
 
-The show's own artwork, loaded directly from its host with no referrer. When there is none, the same box shows a two-character monogram on a tile colour picked by the show's name: CJK names give their first two characters, other names give initials. The cover is decorative (`aria-hidden`).
-
-### Numbering Badge (Station)
-
-A 2.625rem square sign with a 3px route-green frame and 8px corners. The show's monogram is on top (800, 0.8125rem) and the two-letter code of the studied language below it (700, 0.6875rem, dim). It is drawn in the player top bar and on the resume card, where it is 3.25rem with a 4px frame. Standard never draws it.
+The show's own artwork, loaded directly from its host with no referrer. When there is none, the same box shows a two-character monogram on a tile colour picked by the show's name: CJK names give their first two characters, other names give initials. The cover is decorative (`aria-hidden`). Both looks draw it in the same places; Station squares its corners to 2px and draws it at 2.625rem on the shelf and in the player's top bar.
 
 ### The Lines
 
@@ -462,7 +452,7 @@ Every dialog uses one component. On wide screens it is a centred card, `min(36re
 - **Don't** write a hex value, `rgb()` or a named colour below the palette block.
 - **Don't** name a CJK font family in any stack.
 - **Don't** use Standard's blue for anything but play, the word fill, progress, focus and selection. Don't use Station's green for anything off the route, play and selection. Don't use red for anything but failure.
-- **Don't** round Station's panels, controls or Lines beyond 4px. The only rounded exceptions are stops, circular transport buttons and the numbering badge.
+- **Don't** round Station's panels, controls or Lines beyond 4px. The only rounded exceptions are stops and circular transport buttons.
 - **Don't** draw a coloured side border to mark a Line or a card as active. Use a filled stop, a badge, an inset ring or the accent fill.
 - **Don't** name a class `pending`, `now`, `said`, `passed`, `current` or `next` for anything other than the sweep and Line states.
 - **Don't** set `maximum-scale` on the viewport or use `type="password"` on a key field.

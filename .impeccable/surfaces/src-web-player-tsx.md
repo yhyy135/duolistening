@@ -79,7 +79,7 @@ OWN-WORLD:
 - Ground: platform concrete, night-black in dark, under white sign panels.
 - Route green carries the route line, the stop dots, the progress band and the play button.
 - An amber LED strip carries status; red is reserved for failures.
-- Station-numbering badges (the show's code over the studied language) identify an episode's show at a glance.
+- The show's cover, square-cornered, identifies an episode's show at a glance.
 - Barlow (self-hosted, OFL) for Latin letters and numerals; CJK falls through to the system face each Line's language picks.
 - Square corners, 4px route rules, tabular numerals.
 - Lighting a Line changes its colour, never its size or position.

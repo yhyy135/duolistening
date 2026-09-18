@@ -31,7 +31,7 @@ import {
 } from "../shared/model.ts";
 import { type Position, locate, sweepState, tokenWords, wordSlices } from "../shared/locate.ts";
 import { BLOCK_LINES, nextWindow, wantsJapanese } from "./annotate.ts";
-import { Cover, LineBadge } from "./cover.tsx";
+import { Cover } from "./cover.tsx";
 import { Icon } from "./icons.tsx";
 import { isImporting, retryImport, type ImportProgress } from "./import.ts";
 import { htmlBreaks } from "./markdown.ts";
@@ -885,7 +885,6 @@ export function PlayerScreen({ id }: { id: string }) {
           <span>{t("nav.library")}</span>
         </a>
         <Cover src={resource.artworkUrl} name={name} />
-        <LineBadge resource={resource} />
         <div className="bar-title">
           <h1>{resource.title}</h1>
           <small>

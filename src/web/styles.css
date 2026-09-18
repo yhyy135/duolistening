@@ -457,7 +457,7 @@ textarea:focus-visible {
   }
 }
 
-/* ---- covers and badges ---- */
+/* ---- covers ---- */
 
 .cover {
   --cover: 3.5rem;
@@ -501,11 +501,6 @@ textarea:focus-visible {
 }
 .tile-6 {
   --tile: var(--tile-6);
-}
-
-/* The Station look's numbering sign. Standard has no use for it. */
-.line-badge {
-  display: none;
 }
 
 /* Nothing behind a modal moves while it is open. A <dialog> dims the page and makes
@@ -2415,35 +2410,6 @@ main.settings {
     letter-spacing: 0.01em;
   }
 
-  /* The numbering sign: a route-green frame, the studied language over the native. */
-  & .line-badge {
-    flex: none;
-    display: grid;
-    grid-template-rows: 1fr 1fr;
-    place-items: center;
-    width: 2.625rem;
-    height: 2.625rem;
-    padding: 2px 0;
-    border: 3px solid var(--accent);
-    border-radius: 8px;
-    background: var(--raised);
-    color: var(--ink);
-    line-height: 1;
-  }
-  & .line-badge b {
-    align-self: end;
-    font-size: 0.8125rem;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  & .line-badge i {
-    align-self: start;
-    padding-top: 1px;
-    font-size: 0.6875rem;
-    font-style: normal;
-    font-weight: 700;
-    color: var(--dim);
-  }
   & .cover {
     border-radius: 2px;
   }
@@ -2457,9 +2423,11 @@ main.settings {
   & .shelf li {
     padding-inline: 0.875rem 0.375rem;
   }
-  & .row .cover,
-  & .resume-card .cover {
-    display: none;
+  /* 2.625rem, the size of the numbering sign the cover replaced, so the board's rows keep
+     their height and `--lead` above is still the width of what leads a row. */
+  & .row .cover {
+    --cover: 2.625rem;
+    font-size: 0.8125rem;
   }
   & .row-body .title {
     font-weight: 700;
@@ -2497,17 +2465,10 @@ main.settings {
     background: var(--raised);
     box-shadow: inset 0 0 0 1.5px var(--faint);
   }
-  & .resume-card .line-badge {
-    width: 3.25rem;
-    height: 3.25rem;
-    border-width: 4px;
-    border-radius: 10px;
-  }
-  & .resume-card .line-badge b {
+  & .resume-card .cover {
+    --cover: 3.25rem;
     font-size: 1rem;
-  }
-  & .resume-card .line-badge i {
-    font-size: 0.8125rem;
+    box-shadow: none;
   }
   & .resume-play {
     box-shadow: none;
@@ -2620,13 +2581,16 @@ main.settings {
   /* ================================ the player as a timetable ================== */
 
   & .backdrop,
-  & .player-bar .cover,
   & .translating {
     display: none;
   }
   & .player-bar {
     min-height: 4rem;
     padding-inline: max(0.5rem, calc((100% - 54rem) / 2 - 0.35rem));
+  }
+  & .player-bar .cover {
+    --cover: 2.625rem;
+    font-size: 0.8125rem;
   }
 
   & .lyrics {
