@@ -1002,10 +1002,15 @@ main.library {
     gap: 1.125rem 0.75rem;
   }
 }
+/* One column as wide as the tile, stated rather than left to stretch. Every button here
+   centres what it holds, and `justify-content: center` on a grid stops an auto column
+   stretching, so the column was only as wide as the tile's widest text and the cover,
+   sized to the column, shrank with it: 26px for a show called "ESL" in a 151px tile. */
 .suggestion,
 .suggestion:hover:not(:disabled) {
   width: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   justify-items: start;
   gap: 0.2rem;
